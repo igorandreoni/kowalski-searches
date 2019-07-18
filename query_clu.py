@@ -308,7 +308,7 @@ if __name__ == "__main__":
     print_query_params(args)
 
     #Read the CLU catalog
-    clu=Table.read('/Users/igor/data/growth-galaxy-cross-matching/growth-galaxy-cross-matching/CLU_20181213V2.fits')
+    clu=Table.read('CLU_20181213V2.fits')
     clu=clu[clu['dec'] > args.min_dec]
     clu=clu[clu['distmpc'] >= args.min_dist]     
     clu=clu[clu['distmpc'] <= args.max_dist]
