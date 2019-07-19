@@ -1,0 +1,359 @@
+'''
+Query Kowalski searching for transients
+given a set of constraints.
+
+'''
+
+import numpy as np
+import json
+import pdb
+
+from astropy.time import Time
+from astropy.io import ascii
+from astropy.io import fits
+from astropy.table import Table
+import requests
+
+from astropy import units as u
+from astropy.coordinates import Angle
+from astropy.coordinates import SkyCoord
+
+
+def str2bool(v):
+    if v.lower() in ('yes', 'true', 't', 'y', '1', 'Yes', 'True'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0', 'No', 'False'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
+def check_args(args):
+    ''' Check that the jd of the trigger is provided
+    if only detections after a certain date are required '''
+    if args.after_trigger == True:
+        if args.jd_trigger == -1:
+            print('>>> Expected --jd-trigger')
+            print('>>> Exiting...')
+            exit()
+
+    '''Check required duration'''
+    if args.min_days >= args.max_days:
+        print('>>> --min-days must be smaller than --max-days')
+        print('>>> Exiting...')
+        exit()
+    '''Check that RA and Dec arrays have the same length  '''
+
+    return
+
+
+def print_query_params(args):
+    '''Print a summary of the query parameters'''
+
+    print("#-----")
+    print("Cone search parameters:")
+    print(f"A list of {len(args.ra_center)} coordinate pairs will be explored")
+    print(f"Search radius {args.radius} arcmin")
+    if args.after_trigger or args.jd_trigger > 0:
+        print(f"Only sources detected for the first time after {Time(args.jd_trigger, format='jd').iso} will be considered")
+    print(f"Minimum time between the first and last alert {args.min_days} days")
+    print(f"Maximum time between the first and last alert {args.max_days} days")    
+    print(f"Query divided in {args.slices} slices")
+    print("#-----")
+    print(" ")
+
+    return
+
+
+def get_programidx(program_name, username, password):
+    ''' Given a marshal science program name, it returns its programidx'''
+
+    r = requests.post('http://skipper.caltech.edu:8080/cgi-bin/growth/list_programs.cgi', auth=(username, password))
+    programs=json.loads(r.text)
+    program_dict={p['name']:p['programidx'] for i,p in enumerate(programs)}
+
+    try:
+        return program_dict[program_name]
+    except KeyError:
+        print(f'The user {username} does not have access to the program {program_name}')
+        return None
+
+
+def get_candidates_growth_marshal(program_name, username, password):
+    ''' Query the GROWTH db for the science programs '''
+
+    programidx=get_programidx(program_name, username, password)
+    if programidx==None:
+        return None
+    r = requests.post('http://skipper.caltech.edu:8080/cgi-bin/growth/list_program_sources.cgi', \
+        auth=(username, password), data={'programidx':str(programidx)})
+    sources=json.loads(r.text)
+    sources_out=[]
+    for s in sources:
+            coords=SkyCoord(ra=s['ra']*u.deg, dec=s['dec']*u.deg, frame='icrs')
+            sources_out.append({"name":s['name'], "ra":coords.ra, "dec":coords.dec, \
+	        "classification":s['classification'], "redshift":s['redshift'], "creation_date":s['creationdate']})
+
+    return sources_out
+
+
+def query_kowalski_clu(username, password, clu):
+    '''Query kowalski to get a table of CLU galaxies. '''
+
+    k = Kowalski(username=username, password=password, verbose=False)
+    q = {"query_type": "general_search", 
+        "query": "db['CLU_20180513'].find({},{'distmpc': 1})" 
+        }
+    r = k.query(query=q)
+
+    return r
+
+
+def check_clu_transients(sources_kowalski, clu_sources):
+    '''Check if the selected sources are present in the 
+    CLU science program.  If so, print out the relevant information.'''
+
+    sources_in_clu = []
+    sources_not_in_clu = []
+    list_clu_sources = list(s['name'] for s in clu_sources)
+
+    for source in sources_kowalski:
+        print("-------")
+        if source in list_clu_sources:
+            clu_source = clu_sources[np.where(np.array(list_clu_sources) == source)[0][0]]
+            try:
+                for k in clu_source.keys():
+                    print(f"{k}: {clu_source[k]}")
+                sources_in_clu.append(source)
+            except:
+                pdb.set_trace()
+        else:
+            print(f"{source} was not saved in CLU")
+            sources_not_in_clu.append(source)
+        print("-------")
+    print("Summary:")
+    print(f"Sources saved in CLU: {sources_in_clu}")
+    print(f"Sources not saved in CLU: {sources_not_in_clu}")
+
+    return
+
+
+def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger, min_days, max_days, slices):
+    '''Query kowalski and apply the selection criteria'''
+
+    from penquins import Kowalski
+
+    k = Kowalski(username=username, password=password, verbose=False)
+    #Initialize a set for the results
+    set_objectId_all = set([])
+    slices = slices + 1
+    for slice_lim,i in zip(np.linspace(0,len(ra_center),slices)[:-1], np.arange(len(np.linspace(0,len(ra_center),slices)[:-1]))):
+        coords_arr = []
+        for ra, dec in zip(ra_center, dec_center):
+            try:
+                coords=SkyCoord(ra=float(ra)*u.deg, dec=float(dec)*u.deg)
+                coords_arr.append((coords.ra.deg,coords.dec.deg))
+            except ValueError:
+                print("Problems with the galaxy coordinates?")
+                pdb.set_trace()
+                continue
+        try: 
+            print(f"slice: {int(slice_lim)}:{int(np.linspace(0,len(ra_center),slices)[:-1][i+1])}" )
+        except:
+            print(f"slice: {int(slice_lim)}:{int(len(ra_center))}" )
+        q = {"query_type": "cone_search",
+        "object_coordinates": {
+             "radec": f"{coords_arr}", 
+             "cone_search_radius": f"{radius}",
+             "cone_search_unit": "arcmin"
+         },
+         "catalogs": {
+             "ZTF_alerts": {
+                 "filter": {
+		     "candidate.ndethist": {'$gt': 1},
+		     "candidate.rb": {'$gt': 0.2},
+		     "candidate.jdstarthist": {'$gt': jd_trigger}
+		     },
+                 "projection": {
+                     "objectId": 1,
+                     "candidate.rcid": 1,
+                     "candidate.ra": 1,
+                     "candidate.dec": 1,
+                     "candidate.jd": 1,
+                     "candidate.ndethist": 1,
+                     "candidate.jdstarthist": 1,
+                     "candidate.jdendhist": 1,
+                     "candidate.jdendhist": 1,
+                     "candidate.magpsf": 1,
+                     "candidate.sigmapsf": 1,
+                     "candidate.fid": 1,
+                     "candidate.programid": 1,
+                     "candidate.isdiffpos": 1,
+                     "candidate.ndethist": 1,
+                     "candidate.ssdistnr": 1,
+                     "candidate.rb": 1,
+                     "candidate.drb": 1,
+                     "candidate.distpsnr1": 1,   
+                     "candidate.sgscore1": 1,
+                     "candidate.srmag1": 1,
+                     "candidate.distpsnr2": 1,   
+                     "candidate.sgscore2": 1,
+                     "candidate.srmag2": 1,
+                     "candidate.distpsnr3": 1,   
+                     "candidate.sgscore3": 1,
+                     "candidate.srmag3": 1
+                 }
+             }
+         }
+         }
+
+        #Perform the query
+        r = k.query(query=q)
+
+        print('Search completed for this slice.')
+
+#        #Dump the results in a json file
+#        with open(f'results_clu25Mpc_1week_{i+1}.json', 'w') as j:
+#            json.dump(r, j)
+
+        #Identify 'candid' for all relevant candidates
+        objectId_list = []
+        with_neg_sub = []
+        old = []
+        stellar_list = []
+        try:
+            keys_list=list(r['result_data']['ZTF_alerts'].keys())
+        except:
+            print("Error in the keys list?? Check 'r' ")
+            pdb.set_trace()
+        for key in keys_list:
+            all_info=r['result_data']['ZTF_alerts'][key]
+            for info in all_info:
+                if info['objectId'] in old:
+                    continue
+                if info['objectId'] in stellar_list:
+                    continue
+                try:
+                    if info['candidate']['drb'] < 0.8:
+                        continue
+                except:
+                    do = 'do nothing.'
+                if np.abs(info['candidate']['ssdistnr']) < 10:
+                    continue
+                if info['candidate']['isdiffpos'] in ['f',0]:
+                    with_neg_sub.append(info['objectId'])
+                if (info['candidate']['jdendhist'] - info['candidate']['jdstarthist']) < args.min_days:
+                    continue
+                if (info['candidate']['jdendhist'] - info['candidate']['jdstarthist']) > args.max_days:
+                    old.append(info['objectId'])
+                try:
+                    if (np.abs(info['candidate']['distpsnr1']) < 3. and info['candidate']['sgscore1'] > 0.0):
+                        stellar_list.append(info['objectId'])
+                except:
+                    do = 'do nothing.'
+                try:
+                    if (np.abs(info['candidate']['distpsnr1']) < 15. and info['candidate']['srmag1'] < 15. and info['candidate']['sgscore1'] >= 0.5):
+                        continue
+                except:
+                    do = 'do nothing.'
+                try:
+                    if (np.abs(info['candidate']['distpsnr2']) < 15. and info['candidate']['srmag2'] < 15. and info['candidate']['sgscore2'] >= 0.5):
+                        continue
+                except:
+                    do = 'do nothing.'
+                try:
+                    if (np.abs(info['candidate']['distpsnr3']) < 15. and info['candidate']['srmag3'] < 15. and info['candidate']['sgscore3'] >= 0.5):
+                        continue
+                except:
+                    do = 'do nothing.'
+
+                objectId_list.append(info['objectId'])
+
+        set_objectId = set(objectId_list)
+
+        #Remove those objects with negative subtraction
+        for n in set(with_neg_sub):
+            try:
+                set_objectId.remove(n)
+            except:
+                do = 'do nothing'
+
+        #Remove stellar objects
+        for n in set(stellar_list):
+            try:
+                set_objectId.remove(n)
+            except:
+                do = 'do nothing'
+
+        #Remove those objects considered old
+        for n in set(old):
+            try:
+                set_objectId.remove(n)
+            except:
+                do = 'do nothing'
+
+        print(set_objectId)
+
+        set_objectId_all = set_objectId_all | set_objectId
+        print("Cumulative:", set_objectId_all)
+
+        '''
+        print('----stats-----')
+        print('Number of sources with negative sub: ', len(set(with_neg_sub)))
+        print('Number of sources with only pos subtraction: ', len(set_objectId))
+        print(f"Number of sources older than {args.max_days} days: {len(set(old))}, specifically {set(old)}")
+        '''
+
+    return set_objectId_all
+
+
+if __name__ == "__main__":
+    import argparse
+
+    parser = argparse.ArgumentParser(description='Query kowalski.')
+    parser.add_argument('--ra-center', dest='ra_center', nargs='+', required=True, \
+    help='Right ascension of the center (array, in degrees)', default = 0.0)
+    parser.add_argument('--dec-center', dest='dec_center', nargs='+', required=True, \
+    help='Declination of the center (array, in degrees)', default = 0.0)
+    parser.add_argument('--radius', dest='radius', type=float, required=False, \
+    help='Search radius (min)', default = 5)
+    parser.add_argument('--after-trigger', dest='after_trigger', type=str2bool, required=False, \
+    help='Query only alerts whose first detection occurred after a certain date. \
+    If this boolean value is True, then --jd-trigger must be given.', default = False)  
+    parser.add_argument('--jd-trigger', dest='jd_trigger', type=float, required=False, \
+    help='Julian Day of the trigger', default = -1.)            
+    parser.add_argument('--min-days', dest='min_days', type=float, required=False, \
+    help='Minimum time (days) between the first and last alert', default = 0.)
+    parser.add_argument('--max-days', dest='max_days', type=float, required=False, \
+    help='Maximum time (days) between the first and last alert', default = 10000.)
+    parser.add_argument('--slices', dest='slices', type=int, required=False, \
+    help='Number (integer) of slices in which the query will be devided', default = 10)
+
+    args = parser.parse_args()
+
+    #Check that the input args make sense
+    check_args(args)
+
+    #Print a summary of the query input
+    print_query_params(args)
+
+    #Read the secrets
+    secrets = ascii.read('secrets.csv', format = 'csv')
+
+    username = secrets['kowalski_user'][0]
+    password = secrets['kowalski_pwd'][0]
+
+    #Query kowalski
+    sources_kowalski = query_kowalski(username, password, args.ra_center, args.dec_center, args.radius, args.jd_trigger, args.min_days, args.max_days, args.slices)
+
+    #Check the CLU science program on the Marshal
+    username_marshal = secrets['marshal_user'][0]
+    password_marshal= secrets['marshal_pwd'][0]
+    
+    program_name='Census of the Local Universe'
+    clu_sources = get_candidates_growth_marshal(program_name, username_marshal, password_marshal)    
+
+    #For each transient check if it is present in the CLU science program
+    check_clu_transients(sources_kowalski, clu_sources)
+
+    print("Done.")
