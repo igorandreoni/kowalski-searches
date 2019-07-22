@@ -17,6 +17,7 @@ import requests
 from astropy import units as u
 from astropy.coordinates import Angle
 from astropy.coordinates import SkyCoord
+import healpy as hp
 
 
 def str2bool(v):
@@ -47,12 +48,12 @@ def check_args(args):
     return
 
 
-def print_query_params(args):
+def print_query_params(args, ra_center, dec_center):
     '''Print a summary of the query parameters'''
 
     print("#-----")
     print("Cone search parameters:")
-    print(f"A list of {len(args.ra_center)} coordinate pairs will be explored")
+    print(f"A list of {len(ra_center)} coordinate pairs will be explored")
     print(f"Search radius {args.radius} arcmin")
     if args.after_trigger or args.jd_trigger > 0:
         print(f"Only sources detected for the first time after {Time(args.jd_trigger, format='jd').iso} will be considered")
@@ -138,6 +139,63 @@ def check_clu_transients(sources_kowalski, clu_sources):
     return
 
 
+def read_skymap(skymap_filename):
+    '''Read the healpix skymap'''
+
+    hpx = hp.read_map(skymap_filename)
+
+    return hpx
+
+
+def tesselation_spiral(FOV, scale=0.80):
+    FOV = np.pi*FOV*FOV*scale
+
+    area_of_sphere = 4*np.pi*(180/np.pi)**2
+    n = int(np.ceil(area_of_sphere/FOV))
+    print("Using %d points to tile the sphere..."%n)
+
+    golden_angle = np.pi * (3 - np.sqrt(5))
+    theta = golden_angle * np.arange(n)
+    z = np.linspace(1 - 1.0 / n, 1.0 / n - 1, n)
+    radius = np.sqrt(1 - z * z)
+
+    points = np.zeros((n, 3))
+    points[:,0] = radius * np.cos(theta)
+    points[:,1] = radius * np.sin(theta)
+    points[:,2] = z
+
+    ra, dec = hp.pixelfunc.vec2ang(points, lonlat=True)
+
+    return ra, dec
+
+
+def do_getfields(healpix, FOV=60/3600.0, ra=None, dec=None, radius=None, level=None):
+    from ligo.skymap import postprocess
+    import matplotlib
+
+    ras, decs = tesselation_spiral(FOV, scale=0.80)
+    if (not ra is None) and (not dec is None):
+        dist = angular_distance(ras, decs, ra, dec) 
+        idx = np.where(dist <= radius)[0]
+        ras, decs = ras[idx], decs[idx]
+    elif (not level is None):
+        cls = 100 * postprocess.find_greedy_credible_levels(healpix)
+        paths = postprocess.contour(cls, [level], degrees=True, simplify=True)
+        paths = paths[0]
+
+        pts = np.vstack((ras, decs)).T
+        idx = np.zeros((len(ras)))
+        for path in paths:
+            polygon = matplotlib.path.Path(path)
+            check = polygon.contains_points(pts)
+            check = list(map(int, check))
+            idx = np.maximum(idx, check)
+        idx = np.where(idx == 1)[0] 
+        ras, decs = ras[idx], decs[idx]
+
+    return ras, decs
+
+
 def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger, min_days, max_days, slices):
     '''Query kowalski and apply the selection criteria'''
 
@@ -148,8 +206,14 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
     set_objectId_all = set([])
     slices = slices + 1
     for slice_lim,i in zip(np.linspace(0,len(ra_center),slices)[:-1], np.arange(len(np.linspace(0,len(ra_center),slices)[:-1]))):
+        try:
+            ra_center_slice = ra_center[int(slice_lim):int(np.linspace(0,len(ra_center),slices)[:-1][i+1])]
+            dec_center_slice = dec_center[int(slice_lim):int(np.linspace(0,len(dec_center),slices)[:-1][i+1])]
+        except IndexError:
+            ra_center_slice = ra_center[int(slice_lim):]
+            dec_center_slice = dec_center[int(slice_lim):]
         coords_arr = []
-        for ra, dec in zip(ra_center, dec_center):
+        for ra, dec in zip(ra_center_slice, dec_center_slice):
             try:
                 coords=SkyCoord(ra=float(ra)*u.deg, dec=float(dec)*u.deg)
                 coords_arr.append((coords.ra.deg,coords.dec.deg))
@@ -170,9 +234,10 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
          "catalogs": {
              "ZTF_alerts": {
                  "filter": {
-		     "candidate.ndethist": {'$gt': 1},
 		     "candidate.rb": {'$gt': 0.2},
+		     "candidate.ndethist": {'$gt': 1},
 		     "candidate.jdstarthist": {'$gt': jd_trigger}
+		     "candidate.jdendhist": {'$lt': jd_trigger+max_days},
 		     },
                  "projection": {
                      "objectId": 1,
@@ -242,9 +307,9 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
                     continue
                 if info['candidate']['isdiffpos'] in ['f',0]:
                     with_neg_sub.append(info['objectId'])
-                if (info['candidate']['jdendhist'] - info['candidate']['jdstarthist']) < args.min_days:
+                if (info['candidate']['jdendhist'] - info['candidate']['jdstarthist']) < min_days:
                     continue
-                if (info['candidate']['jdendhist'] - info['candidate']['jdstarthist']) > args.max_days:
+                if (info['candidate']['jdendhist'] - info['candidate']['jdstarthist']) > max_days:
                     old.append(info['objectId'])
                 try:
                     if (np.abs(info['candidate']['distpsnr1']) < 3. and info['candidate']['sgscore1'] > 0.0):
@@ -301,7 +366,7 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
         print('----stats-----')
         print('Number of sources with negative sub: ', len(set(with_neg_sub)))
         print('Number of sources with only pos subtraction: ', len(set_objectId))
-        print(f"Number of sources older than {args.max_days} days: {len(set(old))}, specifically {set(old)}")
+        print(f"Number of sources older than {max_days} days: {len(set(old))}, specifically {set(old)}")
         '''
 
     return set_objectId_all
@@ -311,12 +376,18 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description='Query kowalski.')
-    parser.add_argument('--ra-center', dest='ra_center', nargs='+', required=True, \
-    help='Right ascension of the center (array, in degrees)', default = 0.0)
-    parser.add_argument('--dec-center', dest='dec_center', nargs='+', required=True, \
-    help='Declination of the center (array, in degrees)', default = 0.0)
+    parser.add_argument('--skymap', dest='skymap_filename', type=str, required=False, \
+    help='Skymap filename', default = None)
+    parser.add_argument('--level', dest='level', type=float, required=False, \
+    help='Enclosed probability', default = 90)
+    parser.add_argument('--fov', dest='fov', type=float, required=False, \
+    help='Field of view of each cone (radius, in arcmin)', default = 0.1)
+    parser.add_argument('--ra-center', dest='ra_center', nargs='+', required=False, \
+    help='Right ascension of the center (array, in degrees)')
+    parser.add_argument('--dec-center', dest='dec_center', nargs='+', required=False, \
+    help='Declination of the center (array, in degrees)')
     parser.add_argument('--radius', dest='radius', type=float, required=False, \
-    help='Search radius (min)', default = 5)
+    help='Search radius (min)', default = 1.)
     parser.add_argument('--after-trigger', dest='after_trigger', type=str2bool, required=False, \
     help='Query only alerts whose first detection occurred after a certain date. \
     If this boolean value is True, then --jd-trigger must be given.', default = False)  
@@ -334,8 +405,19 @@ if __name__ == "__main__":
     #Check that the input args make sense
     check_args(args)
 
+    #Read the skymap and create the tessellation
+    if args.skymap_filename != None:
+        healpix = read_skymap(args.skymap_filename)
+        ra_center, dec_center = do_getfields(healpix, FOV = args.fov/60., level = args.level)
+    else:
+        ra_center, dec_center = args.ra_center, args.dec_center 
+
+    #Pre-select coordinates above Dec = -30
+    ra_center = ra_center[np.where(dec_center > -30)]
+    dec_center = dec_center[np.where(dec_center > -30)]
+
     #Print a summary of the query input
-    print_query_params(args)
+    print_query_params(args, ra_center, dec_center)
 
     #Read the secrets
     secrets = ascii.read('secrets.csv', format = 'csv')
@@ -344,7 +426,7 @@ if __name__ == "__main__":
     password = secrets['kowalski_pwd'][0]
 
     #Query kowalski
-    sources_kowalski = query_kowalski(username, password, args.ra_center, args.dec_center, args.radius, args.jd_trigger, args.min_days, args.max_days, args.slices)
+    sources_kowalski = query_kowalski(username, password, ra_center, dec_center, args.radius, args.jd_trigger, args.min_days, args.max_days, args.slices)
 
     #Check the CLU science program on the Marshal
     username_marshal = secrets['marshal_user'][0]
