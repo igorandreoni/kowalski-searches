@@ -236,8 +236,8 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
                  "filter": {
 		     "candidate.rb": {'$gt': 0.2},
 		     "candidate.ndethist": {'$gt': 1},
-		     "candidate.jdstarthist": {'$gt': jd_trigger}
-		     "candidate.jdendhist": {'$lt': jd_trigger+max_days},
+		     "candidate.jdstarthist": {'$gt': jd_trigger},
+		     "candidate.jdendhist": {'$lt': jd_trigger+max_days}
 		     },
                  "projection": {
                      "objectId": 1,
@@ -399,7 +399,9 @@ if __name__ == "__main__":
     help='Maximum time (days) between the first and last alert', default = 10000.)
     parser.add_argument('--slices', dest='slices', type=int, required=False, \
     help='Number (integer) of slices in which the query will be devided', default = 10)
-
+    parser.add_argument('--out', dest='out', type=str, required=False, \
+    help='Output filename', default = 'results.txt')
+    
     args = parser.parse_args()
 
     #Check that the input args make sense
@@ -427,6 +429,11 @@ if __name__ == "__main__":
 
     #Query kowalski
     sources_kowalski = query_kowalski(username, password, ra_center, dec_center, args.radius, args.jd_trigger, args.min_days, args.max_days, args.slices)
+
+    #Print results to an output text file
+    with open(args.out, 'a') as f:
+        f.write(f"{args} \n")
+        f.write(f"{sources_kowalski} \n")
 
     #Check the CLU science program on the Marshal
     username_marshal = secrets['marshal_user'][0]
