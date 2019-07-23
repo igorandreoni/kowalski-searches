@@ -235,9 +235,9 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
              "ZTF_alerts": {
                  "filter": {
 		     "candidate.rb": {'$gt': 0.2},
+		     "candidate.jd": {'$gt': jd_trigger},
 		     "candidate.ndethist": {'$gt': 1},
-		     "candidate.jdstarthist": {'$gt': jd_trigger},
-		     "candidate.jdendhist": {'$lt': jd_trigger+max_days}
+		     "candidate.jdstarthist": {'$gt': jd_trigger}
 		     },
                  "projection": {
                      "objectId": 1,
@@ -285,6 +285,7 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
         objectId_list = []
         with_neg_sub = []
         old = []
+        out_of_time_window = []
         stellar_list = []
         try:
             keys_list=list(r['result_data']['ZTF_alerts'].keys())
@@ -311,6 +312,8 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
                     continue
                 if (info['candidate']['jdendhist'] - info['candidate']['jdstarthist']) > max_days:
                     old.append(info['objectId'])
+                if (info['candidate']['jdendhist'] - jd_trigger) > max_days:
+                    out_of_time_window.append(info['objectId'])
                 try:
                     if (np.abs(info['candidate']['distpsnr1']) < 3. and info['candidate']['sgscore1'] > 0.0):
                         stellar_list.append(info['objectId'])
@@ -352,6 +355,13 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
 
         #Remove those objects considered old
         for n in set(old):
+            try:
+                set_objectId.remove(n)
+            except:
+                do = 'do nothing'
+
+        #Remove those objects whole alerts go bejond jd_trigger+max_days
+        for n in set(out_of_time_window):
             try:
                 set_objectId.remove(n)
             except:
