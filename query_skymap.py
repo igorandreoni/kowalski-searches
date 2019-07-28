@@ -196,7 +196,7 @@ def do_getfields(healpix, FOV=60/3600.0, ra=None, dec=None, radius=None, level=N
     return ras, decs
 
 
-def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger, min_days, max_days, slices):
+def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger, min_days, max_days, slices, ndethist_min):
     '''Query kowalski and apply the selection criteria'''
 
     from penquins import Kowalski
@@ -221,6 +221,8 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
                 print("Problems with the galaxy coordinates?")
                 pdb.set_trace()
                 continue
+        #Correct the minimum number of detections
+        ndethist_min_corrected = int(ndethist_min - 1)
         try: 
             print(f"slice: {int(slice_lim)}:{int(np.linspace(0,len(ra_center),slices)[:-1][i+1])}" )
         except:
@@ -236,7 +238,7 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
                  "filter": {
 		     "candidate.rb": {'$gt': 0.2},
 		     "candidate.jd": {'$gt': jd_trigger},
-		     "candidate.ndethist": {'$gt': 1},
+		     "candidate.ndethist": {'$gt': ndethist_min_corrected},
 		     "candidate.jdstarthist": {'$gt': jd_trigger}
 		     },
                  "projection": {
@@ -407,6 +409,8 @@ if __name__ == "__main__":
     help='Minimum time (days) between the first and last alert', default = 0.)
     parser.add_argument('--max-days', dest='max_days', type=float, required=False, \
     help='Maximum time (days) between the first and last alert', default = 10000.)
+    parser.add_argument('--ndethist', dest='ndethist_min', type=int, required=False, \
+    help='Minimum number of detections', default = 2)
     parser.add_argument('--slices', dest='slices', type=int, required=False, \
     help='Number (integer) of slices in which the query will be devided', default = 10)
     parser.add_argument('--out', dest='out', type=str, required=False, \
@@ -438,7 +442,7 @@ if __name__ == "__main__":
     password = secrets['kowalski_pwd'][0]
 
     #Query kowalski
-    sources_kowalski = query_kowalski(username, password, ra_center, dec_center, args.radius, args.jd_trigger, args.min_days, args.max_days, args.slices)
+    sources_kowalski = query_kowalski(username, password, ra_center, dec_center, args.radius, args.jd_trigger, args.min_days, args.max_days, args.slices, args.ndethist_min)
 
     #Print results to an output text file
     with open(args.out, 'a') as f:
