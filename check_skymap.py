@@ -57,11 +57,13 @@ def get_candidates_growth_marshal(program_name, username, password):
     sources=json.loads(r.text)
     sources_out=[]
     for s in sources:
+        try:
             coords=SkyCoord(ra=s['ra']*u.deg, dec=s['dec']*u.deg, frame='icrs')
             sources_out.append({"name":s['name'], "ra":coords.ra, "dec":coords.dec, \
 	        "classification":s['classification'], "redshift":s['redshift'], "creation_date":s['creationdate'], \
 		"id": s['id'], "candid": s['candid']})
-
+        except ValueError:
+            print(s)
     return sources_out
 
 
@@ -184,7 +186,7 @@ def add_autoannotations(name_source, program_name, username, password, event_nam
     else:
         r = requests.post('http://skipper.caltech.edu:8080/cgi-bin/growth/add_autoannotation.cgi', auth=(username, password), \
             data={'id': -1, 'datatype': 'STRING','action': 'commit', 'sourceid':str(id_source), 
-            'type': 'inside', 'comment': new_comment})
+            'type': 'inside_area', 'comment': new_comment})
 
         return
 
