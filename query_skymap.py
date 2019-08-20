@@ -296,13 +296,14 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
             pdb.set_trace()
         for key in keys_list:
             all_info=r['result_data']['ZTF_alerts'][key]
+            
             for info in all_info:
                 if info['objectId'] in old:
                     continue
                 if info['objectId'] in stellar_list:
                     continue
                 try:
-                    if info['candidate']['drb'] < 0.8:
+                    if info['candidate']['drb'] < 0.5:
                         continue
                 except:
                     do = 'do nothing.'
@@ -393,13 +394,13 @@ if __name__ == "__main__":
     parser.add_argument('--level', dest='level', type=float, required=False, \
     help='Enclosed probability', default = 90)
     parser.add_argument('--fov', dest='fov', type=float, required=False, \
-    help='Field of view of each cone (radius, in arcmin)', default = 0.1)
+    help='Field of view of each cone (radius, in arcmin)', default = 60)
     parser.add_argument('--ra-center', dest='ra_center', nargs='+', required=False, \
     help='Right ascension of the center (array, in degrees)')
     parser.add_argument('--dec-center', dest='dec_center', nargs='+', required=False, \
     help='Declination of the center (array, in degrees)')
     parser.add_argument('--radius', dest='radius', type=float, required=False, \
-    help='Search radius (min)', default = 1.)
+    help='Search radius (min), by default radius = fov', default = None)
     parser.add_argument('--after-trigger', dest='after_trigger', type=str2bool, required=False, \
     help='Query only alerts whose first detection occurred after a certain date. \
     If this boolean value is True, then --jd-trigger must be given.', default = False)  
@@ -427,6 +428,9 @@ if __name__ == "__main__":
         ra_center, dec_center = do_getfields(healpix, FOV = args.fov/60., level = args.level)
     else:
         ra_center, dec_center = args.ra_center, args.dec_center 
+
+    if args.radius is None:
+        args.radius = args.fov
 
     #Pre-select coordinates above Dec = -30
     ra_center = ra_center[np.where(dec_center > -30)]
