@@ -196,7 +196,7 @@ def do_getfields(healpix, FOV=60/3600.0, ra=None, dec=None, radius=None, level=N
     return ras, decs
 
 
-def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger, min_days, max_days, slices, ndethist_min):
+def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger, min_days, max_days, slices, ndethist_min, after_trigger=True):
     '''Query kowalski and apply the selection criteria'''
 
     from penquins import Kowalski
@@ -225,6 +225,9 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
                 continue
         #Correct the minimum number of detections
         ndethist_min_corrected = int(ndethist_min - 1)
+        #Correct the jd_trigger if the user specifies to query also before the trigger
+        if after_trigger == False:
+            jd_trigger = 0
         try: 
             print(f"slice: {int(slice_lim)}:{int(np.linspace(0,len(ra_center),slices)[:-1][i+1])}" )
         except:
@@ -325,8 +328,12 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
                     continue
                 if (info['candidate']['jdendhist'] - info['candidate']['jdstarthist']) > max_days:
                     old.append(info['objectId'])
-                if (info['candidate']['jdendhist'] - jd_trigger) > max_days:
-                    out_of_time_window.append(info['objectId'])
+                if after_trigger == True:
+                    if (info['candidate']['jdendhist'] - jd_trigger) > max_days:
+                        out_of_time_window.append(info['objectId'])
+                else:
+                    if (info['candidate']['jdendhist'] - info['candidate']['jdstarthist']) > max_days:
+                        out_of_time_window.append(info['objectId'])
                 try:
                     if (np.abs(info['candidate']['distpsnr1']) < 3. and info['candidate']['sgscore1'] > 0.0):
                         stellar_list.append(info['objectId'])
@@ -400,7 +407,7 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser(description='Query kowalski.')
     parser.add_argument('--skymap', dest='skymap_filename', type=str, required=False, \
-    help='Skymap filename', default = None)
+    help='Skymap filename', default=None)
     parser.add_argument('--level', dest='level', type=float, required=False, \
     help='Enclosed probability', default = 90)
     parser.add_argument('--fov', dest='fov', type=float, required=False, \
@@ -413,7 +420,7 @@ if __name__ == "__main__":
     help='Search radius (min), by default radius = fov', default = None)
     parser.add_argument('--after-trigger', dest='after_trigger', type=str2bool, required=False, \
     help='Query only alerts whose first detection occurred after a certain date. \
-    If this boolean value is True, then --jd-trigger must be given.', default = False)  
+    If this boolean value is True, then --jd-trigger must be given.', default=True)  
     parser.add_argument('--jd-trigger', dest='jd_trigger', type=float, required=False, \
     help='Julian Day of the trigger', default = -1.)            
     parser.add_argument('--min-days', dest='min_days', type=float, required=False, \
@@ -421,7 +428,7 @@ if __name__ == "__main__":
     parser.add_argument('--max-days', dest='max_days', type=float, required=False, \
     help='Maximum time (days) between the first and last alert', default = 10000.)
     parser.add_argument('--ndethist', dest='ndethist_min', type=int, required=False, \
-    help='Minimum number of detections', default = 2)
+    help='Minimum number of detections', default=2)
     parser.add_argument('--slices', dest='slices', type=int, required=False, \
     help='Number (integer) of slices in which the query will be devided', default = 10)
     parser.add_argument('--out', dest='out', type=str, required=False, \
@@ -456,7 +463,7 @@ if __name__ == "__main__":
     password = secrets['kowalski_pwd'][0]
 
     #Query kowalski
-    sources_kowalski = query_kowalski(username, password, ra_center, dec_center, args.radius, args.jd_trigger, args.min_days, args.max_days, args.slices, args.ndethist_min)
+    sources_kowalski = query_kowalski(username, password, ra_center, dec_center, args.radius, args.jd_trigger, args.min_days, args.max_days, args.slices, args.ndethist_min, after_trigger=args.after_trigger)
 
     #Print results to an output text file
     with open(args.out, 'a') as f:
