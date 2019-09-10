@@ -215,11 +215,13 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
         coords_arr = []
         for ra, dec in zip(ra_center_slice, dec_center_slice):
             try:
+                #Remove points too far south for ZTF.  Say, keep only Dec>-40 deg to be conservative
+                if dec < -40.:
+                    continue
                 coords=SkyCoord(ra=float(ra)*u.deg, dec=float(dec)*u.deg)
                 coords_arr.append((coords.ra.deg,coords.dec.deg))
             except ValueError:
                 print("Problems with the galaxy coordinates?")
-                pdb.set_trace()
                 continue
         #Correct the minimum number of detections
         ndethist_min_corrected = int(ndethist_min - 1)
@@ -293,7 +295,15 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
             keys_list=list(r['result_data']['ZTF_alerts'].keys())
         except:
             print("Error in the keys list?? Check 'r' ")
-            pdb.set_trace()
+            #Try one more time 
+            print("Trying to query again the same slice")
+            try:
+                r = k.query(query=q)
+                keys_list=list(r['result_data']['ZTF_alerts'].keys())
+            except:
+                print("The query failed again, skipping slice..")
+                continue
+
         for key in keys_list:
             all_info=r['result_data']['ZTF_alerts'][key]
             
