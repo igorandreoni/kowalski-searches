@@ -1,7 +1,7 @@
 '''
-Query Kowalski searching for transients
+Query Kowalski with cone searches centred
+on CLU galaxies, searching for transients
 given a set of constraints.
-
 '''
 
 
@@ -18,15 +18,13 @@ def print_query_params(args):
     print("#-----")
     print(" ")
 
-    return
-
 
 def get_programidx(program_name, username, password):
-    ''' Given a marshal science program name, it returns its programidx'''
+    '''Given a marshal science program name, it returns its programidx'''
 
     r = requests.post('http://skipper.caltech.edu:8080/cgi-bin/growth/list_programs.cgi', auth=(username, password))
-    programs=json.loads(r.text)
-    program_dict={p['name']:p['programidx'] for i,p in enumerate(programs)}
+    programs = json.loads(r.text)
+    program_dict = {p['name']:p['programidx'] for i,p in enumerate(programs)}
 
     try:
         return program_dict[program_name]
@@ -36,17 +34,17 @@ def get_programidx(program_name, username, password):
 
 
 def get_candidates_growth_marshal(program_name, username, password):
-    ''' Query the GROWTH db for the science programs '''
+    '''Query the GROWTH db for the science programs'''
 
-    programidx=get_programidx(program_name, username, password)
-    if programidx==None:
+    programidx = get_programidx(program_name, username, password)
+    if programidx == None:
         return None
     r = requests.post('http://skipper.caltech.edu:8080/cgi-bin/growth/list_program_sources.cgi', \
         auth=(username, password), data={'programidx':str(programidx)})
-    sources=json.loads(r.text)
-    sources_out=[]
+    sources = json.loads(r.text)
+    sources_out = []
     for s in sources:
-            coords=SkyCoord(ra=s['ra']*u.deg, dec=s['dec']*u.deg, frame='icrs')
+            coords = SkyCoord(ra=s['ra']*u.deg, dec=s['dec']*u.deg, frame='icrs')
             sources_out.append({"name":s['name'], "ra":coords.ra, "dec":coords.dec, \
 	        "classification":s['classification'], "redshift":s['redshift'], "creation_date":s['creationdate']})
 
@@ -54,15 +52,15 @@ def get_candidates_growth_marshal(program_name, username, password):
 
 
 def query_kowalski_clu(username, password, clu):
-    '''Query kowalski to get a table of CLU galaxies. '''
+    '''Query kowalski to get a table of CLU galaxies.'''
 
     k = Kowalski(username=username, password=password, verbose=False)
     q = {"query_type": "general_search", 
         "query": "db['CLU_20180513'].find({},{'distmpc': 1})" 
         }
     r = k.query(query=q)
-    pdb.set_trace()
-    return
+
+    return r
 
 
 def check_clu_transients(sources_kowalski, clu_sources):
@@ -91,8 +89,6 @@ def check_clu_transients(sources_kowalski, clu_sources):
     print(f"Sources saved in CLU: {sources_in_clu}")
     print(f"Sources not saved in CLU: {sources_not_in_clu}")
 
-    return
-
 
 def query_kowalski(username, password, clu, args):
     '''Query kowalski and apply the selection criteria'''
@@ -103,14 +99,14 @@ def query_kowalski(username, password, clu, args):
 
     for slice_lim,i in zip(np.linspace(0,len(clu),args.slices)[:-1], np.arange(len(np.linspace(0,len(clu),args.slices)[:-1]))):
         try:
-            t=clu[int(slice_lim):int(np.linspace(0,len(clu),args.slices)[:-1][i+1])]
+            t = clu[int(slice_lim):int(np.linspace(0,len(clu),args.slices)[:-1][i+1])]
         except IndexError:
-            t=clu[int(slice_lim):]
+            t = clu[int(slice_lim):]
         coords_arr = []
         galaxy_names_arr = []
         for galaxy,ra, dec in zip(t["name"],t["ra"], t["dec"]):
             try:
-                coords=SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
+                coords = SkyCoord(ra=ra*u.deg, dec=dec*u.deg)
                 coords_arr.append((coords.ra.deg,coords.dec.deg))
             except ValueError:
                 print("Problems with the galaxy coordinates?")
@@ -129,7 +125,10 @@ def query_kowalski(username, password, clu, args):
          },
          "catalogs": {
              "ZTF_alerts": {
-                 "filter": {"candidate.ndethist": {'$gt': 1}},
+                 "filter": {
+		 "candidate.ndethist": {'$gt': 1},
+                 "candidate.rb": {'$gt': 0.2}
+		 },
                  "projection": {
                      "objectId": 1,
                      "candidate.rcid": 1,
@@ -177,12 +176,12 @@ def query_kowalski(username, password, clu, args):
         old = []
         stellar_list = []
         try:
-            keys_list=list(r['result_data']['ZTF_alerts'].keys())
+            keys_list = list(r['result_data']['ZTF_alerts'].keys())
         except:
             print("Error in the keys list?? Check 'r' ")
             pdb.set_trace()
         for key in keys_list:
-            all_info=r['result_data']['ZTF_alerts'][key]
+            all_info = r['result_data']['ZTF_alerts'][key]
             for info in all_info:
 #                #Stop at a certain candidId for debugging
 #                if info['objectId'] == 'ZTF19aanfkyc':
@@ -191,10 +190,8 @@ def query_kowalski(username, password, clu, args):
                     continue
                 if info['objectId'] in stellar_list:
                     continue
-                if info['candidate']['rb'] < 0.2:
-                    continue
                 try:
-                    if info['candidate']['drb'] < 0.8:
+                    if info['candidate']['drb'] < 0.5:
                         continue
                 except:
                     do = 'do nothing.'
@@ -207,22 +204,22 @@ def query_kowalski(username, password, clu, args):
                 if (info['candidate']['jdendhist'] - info['candidate']['jdstarthist']) > args.max_days:
                     old.append(info['objectId'])
                 try:
-                    if (np.abs(info['candidate']['distpsnr1']) < 3. and info['candidate']['sgscore1'] > 0.0):
+                    if (np.abs(info['candidate']['distpsnr1']) < 1. and info['candidate']['sgscore1'] > 0.0):
                         stellar_list.append(info['objectId'])
                 except:
                     do = 'do nothing.'
                 try:
-                    if (np.abs(info['candidate']['distpsnr1']) < 15. and info['candidate']['srmag1'] < 15. and info['candidate']['sgscore1'] >= 0.5):
+                    if (np.abs(info['candidate']['distpsnr1']) < 15. and info['candidate']['srmag1'] < 15. and info['candidate']['srmag1'] > 0. and info['candidate']['sgscore1'] >= 0.5):
                         continue
                 except:
                     do = 'do nothing.'
                 try:
-                    if (np.abs(info['candidate']['distpsnr2']) < 15. and info['candidate']['srmag2'] < 15. and info['candidate']['sgscore2'] >= 0.5):
+                    if (np.abs(info['candidate']['distpsnr2']) < 15. and info['candidate']['srmag2'] < 15. and info['candidate']['srmag2'] > 0. and info['candidate']['sgscore2'] >= 0.5):
                         continue
                 except:
                     do = 'do nothing.'
                 try:
-                    if (np.abs(info['candidate']['distpsnr3']) < 15. and info['candidate']['srmag3'] < 15. and info['candidate']['sgscore3'] >= 0.5):
+                    if (np.abs(info['candidate']['distpsnr3']) < 15. and info['candidate']['srmag3'] < 15. and info['candidate']['srmag3'] > 0. and info['candidate']['sgscore3'] >= 0.5):
                         continue
                 except:
                     do = 'do nothing.'
@@ -288,30 +285,29 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    from penquins import Kowalski
     import requests
-
-    import numpy as np
     import json
     import pdb
 
+    import numpy as np
     from astropy.time import Time
     from astropy.io import ascii
     from astropy.io import fits
     from astropy.table import Table
-
     from astropy import units as u
     from astropy.coordinates import Angle
     from astropy.coordinates import SkyCoord
+
+    from penquins import Kowalski
 
     #Print a summary of the query input
     print_query_params(args)
 
     #Read the CLU catalog
-    clu=Table.read('CLU_20181213V2.fits')
-    clu=clu[clu['dec'] > args.min_dec]
-    clu=clu[clu['distmpc'] >= args.min_dist]     
-    clu=clu[clu['distmpc'] <= args.max_dist]
+    clu = Table.read('CLU_20181213V2.fits')
+    clu = clu[clu['dec'] > args.min_dec]
+    clu = clu[clu['distmpc'] >= args.min_dist]     
+    clu = clu[clu['distmpc'] <= args.max_dist]
     print(f"There are {len(clu)} CLU galaxies in this sample.")
 
     #Read the secrets
@@ -341,7 +337,6 @@ if __name__ == "__main__":
 #Plot the data
 for galaxy_name, idcoords in zip(galaxy_names_arr, r['result_data']['ZTF_alerts'].keys()):
     all_info=r['result_data']['ZTF_alerts'][idcoords]
-    pdb.set_trace()
 
     jd_arr=[]
     mag_arr=[]
