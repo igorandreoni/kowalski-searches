@@ -5,7 +5,7 @@ Search for transients using the kowalski database.
 ## Required software
 Python 3.6 or later version
 
-###Requited packages
+### Required packages
 numpy <br>
 astropy <br>
 matplotlib <br>
@@ -14,65 +14,65 @@ ligo.skymap (0.1.11, or any version that properly supports multi-resolution skym
 
 ## Query skymap 
 
-usage: query_skymap.py [-h] [--skymap SKYMAP_FILENAME] [--level LEVEL]
-                       [--fov FOV] [--ra-center RA_CENTER [RA_CENTER ...]]
-                       [--dec-center DEC_CENTER [DEC_CENTER ...]]
-                       [--radius RADIUS] [--after-trigger AFTER_TRIGGER]
-                       [--jd-trigger JD_TRIGGER] [--min-days MIN_DAYS]
-                       [--max-days MAX_DAYS] [--ndethist NDETHIST_MIN]
-                       [--slices SLICES] [--out OUT]
+usage: query_skymap.py [-h] [--skymap SKYMAP_FILENAME] [--level LEVEL] <br>
+                       [--fov FOV] [--ra-center RA_CENTER [RA_CENTER ...]] <br>
+                       [--dec-center DEC_CENTER [DEC_CENTER ...]] <br>
+                       [--radius RADIUS] [--after-trigger AFTER_TRIGGER] <br>
+                       [--jd-trigger JD_TRIGGER] [--min-days MIN_DAYS] <br>
+                       [--max-days MAX_DAYS] [--ndethist NDETHIST_MIN] <br>
+                       [--slices SLICES] [--out OUT] <br>
+ <br>
+Query kowalski with cone searches within a LIGO/Virgo skymap contour. <br>
+ <br>
+optional arguments: <br>
+  -h, --help            show this help message and exit <br>
+  --skymap SKYMAP_FILENAME <br>
+                        Skymap filename <br>
+  --level LEVEL         Enclosed probability <br>
+  --fov FOV             Field of view of each cone (radius, in arcmin) <br>
+  --ra-center RA_CENTER [RA_CENTER ...] <br>
+                        Right ascension of the center (array, in degrees) <br>
+  --dec-center DEC_CENTER [DEC_CENTER ...] <br>
+                        Declination of the center (array, in degrees) <br>
+  --radius RADIUS       Search radius (min), by default radius = fov <br>
+  --after-trigger AFTER_TRIGGER <br>
+                        Query only alerts whose first detection occurred after <br>
+                        a certain date. If this boolean value is True, then <br>
+                        --jd-trigger must be given.  <br>
+  --jd-trigger JD_TRIGGER  <br>
+                        Julian Day of the trigger <br>
+  --min-days MIN_DAYS   Minimum time (days) between the first and last alert <br>
+  --max-days MAX_DAYS   Maximum time (days) between the first and last alert <br>
+  --ndethist NDETHIST_MIN <br>
+                        Minimum number of detections <br>
+  --slices SLICES       Number (integer) of slices in which the query will be <br>
+                        devided <br>
+  --out OUT             Output filename <br>
 
-Query kowalski with cone searches within a LIGO/Virgo skymap contour.
-
-optional arguments:
-  -h, --help            show this help message and exit
-  --skymap SKYMAP_FILENAME
-                        Skymap filename
-  --level LEVEL         Enclosed probability
-  --fov FOV             Field of view of each cone (radius, in arcmin)
-  --ra-center RA_CENTER [RA_CENTER ...]
-                        Right ascension of the center (array, in degrees)
-  --dec-center DEC_CENTER [DEC_CENTER ...]
-                        Declination of the center (array, in degrees)
-  --radius RADIUS       Search radius (min), by default radius = fov
-  --after-trigger AFTER_TRIGGER
-                        Query only alerts whose first detection occurred after
-                        a certain date. If this boolean value is True, then
-                        --jd-trigger must be given.
-  --jd-trigger JD_TRIGGER
-                        Julian Day of the trigger
-  --min-days MIN_DAYS   Minimum time (days) between the first and last alert
-  --max-days MAX_DAYS   Maximum time (days) between the first and last alert
-  --ndethist NDETHIST_MIN
-                        Minimum number of detections
-  --slices SLICES       Number (integer) of slices in which the query will be
-                        devided
-  --out OUT             Output filename
-
-example: python query_skymap.py --skymap LALInference.fits.gz --level 90 --slice 100 --jd-trigger 2458736.5599421295 --min-days 0.02 --max-days 30.
+example: python query_skymap.py --skymap LALInference.fits.gz --level 90 --slice 100 --jd-trigger 2458736.5599421295 --min-days 0.02 --max-days 30. <br>
 
 
 ## Check skymap
-WIP
+WIP <br>
 
 ## Query CLU
-usage: query_clu.py [-h] [--radius RADIUS] [--min-days MIN_DAYS]
-                    [--max-days MAX_DAYS] [--min-dist MIN_DIST]
-                    [--max-dist MAX_DIST] [--min-dec MIN_DEC]
+usage: query_clu.py [-h] [--radius RADIUS] [--min-days MIN_DAYS] <br>
+                    [--max-days MAX_DAYS] [--min-dist MIN_DIST] <br>
+                    [--max-dist MAX_DIST] [--min-dec MIN_DEC] <br>
                     [--slices SLICES]
-
-Query kowalski with cone searces centred on CLU galaxies.
-
-optional arguments:
-  -h, --help           show this help message and exit
-  --radius RADIUS      Search radius (arcmin)
-  --min-days MIN_DAYS  Minimum time (days) between the first and last alert
-  --max-days MAX_DAYS  Maximum time (days) between the first and last alert
-  --min-dist MIN_DIST  Minimum distance(Mpc) of the CLU galaxies to explore
-  --max-dist MAX_DIST  Maximum distance(Mpc) of the CLU galaxies to explore
-  --min-dec MIN_DEC    Minimum declination (celestial, deg) of the CLU
-                       galaxies to explore
-  --slices SLICES      Number (integer) of slices in which the query will be
-                       devided
+ <br>
+Query kowalski with cone searces centred on CLU galaxies. <br>
+ <br>
+optional arguments: <br>
+  -h, --help           show this help message and exit <br>
+  --radius RADIUS      Search radius (arcmin) <br>
+  --min-days MIN_DAYS  Minimum time (days) between the first and last alert <br>
+  --max-days MAX_DAYS  Maximum time (days) between the first and last alert <br>
+  --min-dist MIN_DIST  Minimum distance(Mpc) of the CLU galaxies to explore <br>
+  --max-dist MAX_DIST  Maximum distance(Mpc) of the CLU galaxies to explore <br>
+  --min-dec MIN_DEC    Minimum declination (celestial, deg) of the CLU <br>
+                       galaxies to explore <br>
+  --slices SLICES      Number (integer) of slices in which the query will be <br>
+                       devided <br>
 
 
