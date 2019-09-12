@@ -26,26 +26,26 @@ Query kowalski with cone searches within a LIGO/Virgo skymap contour. <br>
  <br>
 optional arguments: <br>
   -h, --help            show this help message and exit <br>
-  --skymap SKYMAP_FILENAME <br>
+  --skymap SKYMAP_FILENAME 
                         Skymap filename <br>
   --level LEVEL         Enclosed probability <br>
   --fov FOV             Field of view of each cone (radius, in arcmin) <br>
-  --ra-center RA_CENTER [RA_CENTER ...] <br>
+  --ra-center RA_CENTER [RA_CENTER ...]
                         Right ascension of the center (array, in degrees) <br>
-  --dec-center DEC_CENTER [DEC_CENTER ...] <br>
+  --dec-center DEC_CENTER [DEC_CENTER ...]
                         Declination of the center (array, in degrees) <br>
   --radius RADIUS       Search radius (min), by default radius = fov <br>
-  --after-trigger AFTER_TRIGGER <br>
-                        Query only alerts whose first detection occurred after <br>
-                        a certain date. If this boolean value is True, then <br>
+  --after-trigger AFTER_TRIGGER 
+                        Query only alerts whose first detection occurred after 
+                        a certain date. If this boolean value is True, then
                         --jd-trigger must be given.  <br>
-  --jd-trigger JD_TRIGGER  <br>
+  --jd-trigger JD_TRIGGER 
                         Julian Day of the trigger <br>
   --min-days MIN_DAYS   Minimum time (days) between the first and last alert <br>
   --max-days MAX_DAYS   Maximum time (days) between the first and last alert <br>
-  --ndethist NDETHIST_MIN <br>
+  --ndethist NDETHIST_MIN
                         Minimum number of detections <br>
-  --slices SLICES       Number (integer) of slices in which the query will be <br>
+  --slices SLICES       Number (integer) of slices in which the query will be
                         devided <br>
   --out OUT             Output filename <br>
 
