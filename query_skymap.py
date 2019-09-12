@@ -200,8 +200,6 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
     set_objectId_all = set([])
     slices = slices + 1
     for slice_lim,i in zip(np.linspace(0,len(ra_center),slices)[:-1], np.arange(len(np.linspace(0,len(ra_center),slices)[:-1]))):
-        if slice_lim < 192:
-            continue
         try:
             ra_center_slice = ra_center[int(slice_lim):int(np.linspace(0,len(ra_center),slices)[:-1][i+1])]
             dec_center_slice = dec_center[int(slice_lim):int(np.linspace(0,len(dec_center),slices)[:-1][i+1])]
