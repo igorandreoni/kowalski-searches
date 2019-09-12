@@ -1,19 +1,18 @@
 '''
 Query Kowalski searching for transients
 given a set of constraints.
-
 '''
 
-import numpy as np
 import json
+import requests
 import pdb
 
+import numpy as np
 from astropy.time import Time
 from astropy.io import ascii
 from astropy.io import fits
 from astropy.table import Table
-import requests
-
+import matplotlib.pyplot as plt
 from astropy import units as u
 from astropy.coordinates import Angle
 from astropy.coordinates import SkyCoord
@@ -30,7 +29,7 @@ def str2bool(v):
 
 
 def check_args(args):
-    ''' Check that the jd of the trigger is provided
+    '''Check that the jd of the trigger is provided
     if only detections after a certain date are required '''
     if args.after_trigger == True:
         if args.jd_trigger == -1:
@@ -38,14 +37,11 @@ def check_args(args):
             print('>>> Exiting...')
             exit()
 
-    '''Check required duration'''
+    #Check required duration
     if args.min_days >= args.max_days:
         print('>>> --min-days must be smaller than --max-days')
         print('>>> Exiting...')
         exit()
-    '''Check that RA and Dec arrays have the same length  '''
-
-    return
 
 
 def print_query_params(args, ra_center, dec_center):
@@ -63,15 +59,13 @@ def print_query_params(args, ra_center, dec_center):
     print("#-----")
     print(" ")
 
-    return
-
 
 def get_programidx(program_name, username, password):
     ''' Given a marshal science program name, it returns its programidx'''
 
     r = requests.post('http://skipper.caltech.edu:8080/cgi-bin/growth/list_programs.cgi', auth=(username, password))
-    programs=json.loads(r.text)
-    program_dict={p['name']:p['programidx'] for i,p in enumerate(programs)}
+    programs = json.loads(r.text)
+    program_dict = {p['name']:p['programidx'] for i,p in enumerate(programs)}
 
     try:
         return program_dict[program_name]
@@ -81,17 +75,17 @@ def get_programidx(program_name, username, password):
 
 
 def get_candidates_growth_marshal(program_name, username, password):
-    ''' Query the GROWTH db for the science programs '''
+    '''Query the GROWTH db for the science programs'''
 
     programidx=get_programidx(program_name, username, password)
     if programidx==None:
         return None
     r = requests.post('http://skipper.caltech.edu:8080/cgi-bin/growth/list_program_sources.cgi', \
         auth=(username, password), data={'programidx':str(programidx)})
-    sources=json.loads(r.text)
-    sources_out=[]
+    sources = json.loads(r.text)
+    sources_out = []
     for s in sources:
-            coords=SkyCoord(ra=s['ra']*u.deg, dec=s['dec']*u.deg, frame='icrs')
+            coords = SkyCoord(ra=s['ra']*u.deg, dec=s['dec']*u.deg, frame='icrs')
             sources_out.append({"name":s['name'], "ra":coords.ra, "dec":coords.dec, \
 	        "classification":s['classification'], "redshift":s['redshift'], "creation_date":s['creationdate']})
 
@@ -99,7 +93,7 @@ def get_candidates_growth_marshal(program_name, username, password):
 
 
 def query_kowalski_clu(username, password, clu):
-    '''Query kowalski to get a table of CLU galaxies. '''
+    '''Query kowalski to get a table of CLU galaxies.'''
 
     k = Kowalski(username=username, password=password, verbose=False)
     q = {"query_type": "general_search", 
@@ -172,6 +166,7 @@ def tesselation_spiral(FOV, scale=0.80):
 def do_getfields(healpix, FOV=60/3600.0, ra=None, dec=None, radius=None, level=None):
     from ligo.skymap import postprocess
     import matplotlib
+    import matplotlib.pyplot as plt 
 
     ras, decs = tesselation_spiral(FOV, scale=0.80)
     if (not ra is None) and (not dec is None):
@@ -182,11 +177,10 @@ def do_getfields(healpix, FOV=60/3600.0, ra=None, dec=None, radius=None, level=N
         cls = 100 * postprocess.find_greedy_credible_levels(healpix)
         paths = postprocess.contour(cls, [level], degrees=True, simplify=True)
         paths = paths[0]
-
         pts = np.vstack((ras, decs)).T
         idx = np.zeros((len(ras)))
         for path in paths:
-            polygon = matplotlib.path.Path(path)
+            polygon = matplotlib.path.Path(path, closed=True)
             check = polygon.contains_points(pts)
             check = list(map(int, check))
             idx = np.maximum(idx, check)
@@ -206,6 +200,8 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
     set_objectId_all = set([])
     slices = slices + 1
     for slice_lim,i in zip(np.linspace(0,len(ra_center),slices)[:-1], np.arange(len(np.linspace(0,len(ra_center),slices)[:-1]))):
+        if slice_lim < 192:
+            continue
         try:
             ra_center_slice = ra_center[int(slice_lim):int(np.linspace(0,len(ra_center),slices)[:-1][i+1])]
             dec_center_slice = dec_center[int(slice_lim):int(np.linspace(0,len(dec_center),slices)[:-1][i+1])]
@@ -302,15 +298,17 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
             print("Trying to query again the same slice")
             try:
                 r = k.query(query=q)
-                keys_list=list(r['result_data']['ZTF_alerts'].keys())
+                keys_list = list(r['result_data']['ZTF_alerts'].keys())
             except:
                 print("The query failed again, skipping slice..")
                 continue
 
         for key in keys_list:
-            all_info=r['result_data']['ZTF_alerts'][key]
+            all_info = r['result_data']['ZTF_alerts'][key]
             
             for info in all_info:
+                if info['objectId'] == 'ZTF19abygvmp':
+                    pdb.set_trace()
                 if info['objectId'] in old:
                     continue
                 if info['objectId'] in stellar_list:
@@ -335,22 +333,22 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
                     if (info['candidate']['jdendhist'] - info['candidate']['jdstarthist']) > max_days:
                         out_of_time_window.append(info['objectId'])
                 try:
-                    if (np.abs(info['candidate']['distpsnr1']) < 3. and info['candidate']['sgscore1'] > 0.0):
+                    if (np.abs(info['candidate']['distpsnr1']) < 1. and info['candidate']['sgscore1'] > 0.0):
                         stellar_list.append(info['objectId'])
                 except:
                     do = 'do nothing.'
                 try:
-                    if (np.abs(info['candidate']['distpsnr1']) < 15. and info['candidate']['srmag1'] < 15. and info['candidate']['sgscore1'] >= 0.5):
+                    if (np.abs(info['candidate']['distpsnr1']) < 15. and info['candidate']['srmag1'] < 15. and info['candidate']['srmag1'] > 0. and info['candidate']['sgscore1'] >= 0.5):
                         continue
                 except:
                     do = 'do nothing.'
                 try:
-                    if (np.abs(info['candidate']['distpsnr2']) < 15. and info['candidate']['srmag2'] < 15. and info['candidate']['sgscore2'] >= 0.5):
+                    if (np.abs(info['candidate']['distpsnr2']) < 15. and info['candidate']['srmag2'] < 15. and info['candidate']['srmag2'] > 0. and info['candidate']['sgscore2'] >= 0.5):
                         continue
                 except:
                     do = 'do nothing.'
                 try:
-                    if (np.abs(info['candidate']['distpsnr3']) < 15. and info['candidate']['srmag3'] < 15. and info['candidate']['sgscore3'] >= 0.5):
+                    if (np.abs(info['candidate']['distpsnr3']) < 15. and info['candidate']['srmag3'] < 15. and info['candidate']['srmag3'] > 0. and info['candidate']['sgscore3'] >= 0.5):
                         continue
                 except:
                     do = 'do nothing.'
@@ -442,7 +440,7 @@ if __name__ == "__main__":
     #Read the skymap and create the tessellation
     if args.skymap_filename != None:
         healpix = read_skymap(args.skymap_filename)
-        ra_center, dec_center = do_getfields(healpix, FOV = args.fov/60., level = args.level)
+        ra_center, dec_center = do_getfields(healpix, FOV=args.fov/60., level=args.level)
     else:
         ra_center, dec_center = args.ra_center, args.dec_center 
 
@@ -457,7 +455,7 @@ if __name__ == "__main__":
     print_query_params(args, ra_center, dec_center)
 
     #Read the secrets
-    secrets = ascii.read('secrets.csv', format = 'csv')
+    secrets = ascii.read('secrets.csv', format='csv')
 
     username = secrets['kowalski_user'][0]
     password = secrets['kowalski_pwd'][0]
@@ -472,9 +470,9 @@ if __name__ == "__main__":
 
     #Check the CLU science program on the Marshal
     username_marshal = secrets['marshal_user'][0]
-    password_marshal= secrets['marshal_pwd'][0]
+    password_marshal = secrets['marshal_pwd'][0]
     
-    program_name='Census of the Local Universe'
+    program_name = 'Census of the Local Universe'
     clu_sources = get_candidates_growth_marshal(program_name, username_marshal, password_marshal)    
 
     #For each transient check if it is present in the CLU science program
