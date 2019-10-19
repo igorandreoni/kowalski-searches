@@ -332,7 +332,7 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
                     continue
                 if (info['candidate']['jdendhist'] - info['candidate']['jdstarthist']) > max_days:
                     old.append(info['objectId'])
-                if (info['candidate']['jdstarthist'] - jd_trigger) < within_days:
+                if (info['candidate']['jdstarthist'] - jd_trigger) > within_days:
                     old.append(info['objectId'])
                 if after_trigger == True:
                     if (info['candidate']['jdendhist'] - jd_trigger) > max_days:
@@ -433,7 +433,7 @@ if __name__ == "__main__":
     parser.add_argument('--max-days', dest='max_days', type=float, required=False, \
     help='Maximum time (days) between the first and last alert', default = 10000.)
     parser.add_argument('--within-days', dest='within_days', type=float, required=False, \
-    help='Maximum time (days) between the jd-trigger and the first alert', default = 0.)
+    help='Maximum time (days) between the jd-trigger and the first alert', default = 1000.)
     parser.add_argument('--ndethist', dest='ndethist_min', type=int, required=False, \
     help='Minimum number of detections', default=2)
     parser.add_argument('--slices', dest='slices', type=int, required=False, \
