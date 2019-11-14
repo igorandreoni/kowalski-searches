@@ -341,7 +341,7 @@ def query_kowalski(username, password, ra_center, dec_center, radius, jd_trigger
                     if (info['candidate']['jdendhist'] - info['candidate']['jdstarthist']) > max_days:
                         out_of_time_window.append(info['objectId'])
                 try:
-                    if (np.abs(info['candidate']['distpsnr1']) < 3. and info['candidate']['sgscore1'] > 0.0):
+                    if (np.abs(info['candidate']['distpsnr1']) < 2. and info['candidate']['sgscore1'] >= 0.76):
                         stellar_list.append(info['objectId'])
                 except:
                     do = 'do nothing.'
