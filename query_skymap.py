@@ -373,7 +373,7 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
                         out_of_time_window.append(info['objectId'])
                 try:
                     if (np.abs(info['candidate']['distpsnr1']) < 2. and
-                    info['candidate']['sgscore1'] >= 0.76):
+                    info['candidate']['sgscore1'] >= 0.50):
                         stellar_list.append(info['objectId'])
                 except (KeyError, ValueError):
                     pass
