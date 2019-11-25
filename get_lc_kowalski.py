@@ -53,10 +53,12 @@ def create_tbl_lc(light_curves, outfile):
                        'f', 'f', 'S', 'f', 'f', 'i'))
 
     for l in light_curves:
+        magzpsci = l["candidate"].get("magzpsci")
+        magzpsciunc = l["candidate"].get("magzpsciunc")
         row = [l["objectId"], l["candidate"]["ra"], l["candidate"]["dec"],
                l["candidate"]["jd"], l["candidate"]["magpsf"],
                l["candidate"]["sigmapsf"], filters[str(l["candidate"]["fid"])],
-               l["candidate"]["magzpsci"],  l["candidate"]["magzpsciunc"],
+               magzpsci, magzpsciunc,
                l["candidate"]["programid"]]
         tbl.add_row(row)
     tbl.sort("jd")
