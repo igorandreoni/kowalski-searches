@@ -497,7 +497,8 @@ def query_kowalski_coords(username, password, names):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description='Query kowalski.')
+    parser = argparse.ArgumentParser(description='Query kowalski to find \
+counterpart candidates.')
     parser.add_argument('--skymap', dest='skymap_filename', type=str,
                         required=False,
                         help='Skymap filename', default=None)
