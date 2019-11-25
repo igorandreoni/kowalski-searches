@@ -83,7 +83,7 @@ the coordinates will be queried from kowalski', default=None)
         exit()
 
     # Read the secrets
-    secrets = ascii.read('../kowalski/secrets.csv', format='csv')
+    secrets = ascii.read('secrets.csv', format='csv')
     username_kowalski = secrets['kowalski_user'][0]
     password_kowalski = secrets['kowalski_pwd'][0]
 
