@@ -44,7 +44,7 @@ optional arguments: <br>
                         read from the skymap header. <br>
   --min-days MIN_DAYS   Minimum time (days) between the first and last alert <br>
   --max-days MAX_DAYS   Maximum time (days) between the first and last alert <br>
-  --within-days WITHIN_DAYS  <br>
+  --within-days WITHIN_DAYS
                         Maximum time (days) between the jd-trigger and the  <br>
                         first alert  <br>
   --ndethist NDETHIST_MIN
@@ -52,7 +52,6 @@ optional arguments: <br>
   --slices SLICES       Number (integer) of slices in which the query will be
                         devided <br>
   --out OUT             Output filename <br>
-
   --ingest INGEST       Use with caution! Ingest the candidates to the <br>
                         scanning page on the GROWTH marshal <br>
   --ingest-program INGEST_PROGRAM
