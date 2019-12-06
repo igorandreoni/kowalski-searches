@@ -58,7 +58,7 @@ optional arguments: <br>
                         Ingest the candidates to the scanning page of the <br>
                         given GROWTH marshal program <br>
 
-example: python query_skymap.py --skymap LALInference.fits.gz --level 90 --slice 100 --jd-trigger 2458736.5599421295 --min-days 0.02 --max-days 30. <br>
+example: python query_skymap.py --skymap LALInference.fits.gz --level 90 --slice 20 --min-days 0.02 --max-days 30. --within-days 2.0 <br>
 
 
 ## Check skymap
