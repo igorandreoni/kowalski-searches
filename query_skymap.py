@@ -12,8 +12,6 @@ from astropy.io import ascii
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 import healpy as hp
-from ligo.skymap import postprocess
-import matplotlib
 
 from penquins import Kowalski
 
@@ -157,30 +155,18 @@ def angular_distance(ra1, dec1, ra2, dec2):
     return dist/np.pi*180.
 
 
-def do_getfields(healpix, FOV=60/3600.0, ra=None, dec=None, radius=None,
-                 level=None):
+def do_getfields_new(skymap_filename, FOV=60/3600.0, ra=None, dec=None, radius=None,
+                     level=None):
 
     ras, decs = tesselation_spiral(FOV, scale=0.80)
-    if (ra is not None) and (dec is not None):
-        dist = angular_distance(ras, decs, ra, dec)
-        idx = np.where(dist <= radius)[0]
-        ras, decs = ras[idx], decs[idx]
-    elif (level is not None):
-        cls = 100 * postprocess.find_greedy_credible_levels(healpix)
-        paths = postprocess.contour(cls, [level], degrees=True, simplify=True)
-        paths = paths[0]
+    coords_dict_list = list({"ra": r, "dec": d} for r, d in zip(ras, decs))
+    coords_out = select_sources_in_level(coords_dict_list,
+                                         skymap_filename,
+                                         level=level)
+    ra_out = np.array(list(c["ra"] for c in coords_out))
+    dec_out = np.array(list(c["dec"] for c in coords_out))
 
-        pts = np.vstack((ras, decs)).T
-        idx = np.zeros((len(ras)))
-        for path in paths:
-            polygon = matplotlib.path.Path(path)
-            check = polygon.contains_points(pts)
-            check = list(map(int, check))
-            idx = np.maximum(idx, check)
-        idx = np.where(idx == 1)[0]
-        ras, decs = ras[idx], decs[idx]
-
-    return ras, decs
+    return ra_out, dec_out
 
 
 def select_sources_in_contour(sources, skymap, level=90):
@@ -216,6 +202,7 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
     # Initialize a set for the results
     set_objectId_all = set([])
     slices = slices + 1
+
     for slice_lim, i in zip(
                            np.linspace(0, len(ra_center), slices)[:-1],
                            np.arange(len(np.linspace(0, len(ra_center),
@@ -276,42 +263,48 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
                                                      within_days}
                                                      },
                                          "projection": {
-                                                         "objectId": 1,
-                                                         "candidate.rcid": 1,
-                                                         "candidate.ra": 1,
-                                                         "candidate.dec": 1,
-                                                         "candidate.jd": 1,
-                                                         "candidate.ndethist":
-                                                         1,
-                                                         "candidate.jdstarthist": 1,
-                                                         "candidate.jdendhist":
-                                                         1,
-                                                         "candidate.jdendhist":
-                                                         1,
-                                                         "candidate.magpsf": 1,
-                                                         "candidate.sigmapsf":
-                                                         1,
-                                                         "candidate.fid": 1,
-                                                         "candidate.programid":
-                                                         1,
-                                                         "candidate.isdiffpos":
-                                                         1,
-                                                         "candidate.ndethist":
-                                                         1,
-                                                         "candidate.ssdistnr":
-                                                         1,
-                                                         "candidate.rb": 1,
-                                                         "candidate.drb": 1,
-                                                         "candidate.distpsnr1": 1,
-                                                         "candidate.sgscore1": 1,
-                                                         "candidate.srmag1": 1,
-                                                         "candidate.distpsnr2": 1,
-                                                         "candidate.sgscore2": 1,
-                                                         "candidate.srmag2": 1,
-                                                         "candidate.distpsnr3": 1,
-                                                         "candidate.sgscore3": 1,
-                                                         "candidate.srmag3": 1
-                                                         }
+                                                        "objectId": 1,
+                                                        "candidate.rcid": 1,
+                                                        "candidate.ra": 1,
+                                                        "candidate.dec": 1,
+                                                        "candidate.jd": 1,
+                                                        "candidate.ndethist":
+                                                        1,
+                                                        "candidate.jdstarthist": 1,
+                                                        "candidate.jdendhist":
+                                                        1,
+                                                        "candidate.jdendhist":
+                                                        1,
+                                                        "candidate.magpsf": 1,
+                                                        "candidate.sigmapsf":
+                                                        1,
+                                                        "candidate.fid": 1,
+                                                        "candidate.programid":
+                                                        1,
+                                                        "candidate.isdiffpos":
+                                                        1,
+                                                        "candidate.ndethist":
+                                                        1,
+                                                        "candidate.ssdistnr":
+                                                        1,
+                                                        "candidate.rb": 1,
+                                                        "candidate.drb": 1,
+                                                        "candidate.distpsnr1":
+                                                        1,
+                                                        "candidate.sgscore1":
+                                                        1,
+                                                        "candidate.srmag1": 1,
+                                                        "candidate.distpsnr2":
+                                                        1,
+                                                        "candidate.sgscore2":
+                                                        1,
+                                                        "candidate.srmag2": 1,
+                                                        "candidate.distpsnr3":
+                                                        1,
+                                                        "candidate.sgscore3":
+                                                        1,
+                                                        "candidate.srmag3": 1
+                                                        }
                                            }
                            },
              "kwargs": {"hint": "gw01"}
@@ -363,6 +356,11 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
                 if (info['candidate']['jdstarthist'] -
                 jd_trigger) > within_days:
                     old.append(info['objectId'])
+                # REMOVE!  Only for O3a paper
+                # if (info['candidate']['jdendhist'] -
+                # info['candidate']['jdstarthist']) >= 72./24. and
+                # info['candidate']['ndethist'] <= 2. :
+                #     out_of_time_window.append(info['objectId'])
                 if after_trigger is True:
                     if (info['candidate']['jdendhist'] -
                     jd_trigger) > max_days:
@@ -497,8 +495,7 @@ def query_kowalski_coords(username, password, names):
 if __name__ == "__main__":
     import argparse
 
-    parser = argparse.ArgumentParser(description='Query kowalski to find \
-counterpart candidates.')
+    parser = argparse.ArgumentParser(description='Query kowalski.')
     parser.add_argument('--skymap', dest='skymap_filename', type=str,
                         required=False,
                         help='Skymap filename', default=None)
@@ -561,8 +558,9 @@ counterpart candidates.')
     # Read the skymap and create the tessellation
     if args.skymap_filename is not None:
         healpix, header = read_skymap(args.skymap_filename)
-        ra_center, dec_center = do_getfields(healpix, FOV=args.fov/60.,
-                                             level=args.level)
+        ra_center, dec_center = do_getfields_new(args.skymap_filename,
+                                                 FOV=args.fov/60.,
+                                                 level=args.level)
     else:
         ra_center, dec_center = args.ra_center, args.dec_center
 
