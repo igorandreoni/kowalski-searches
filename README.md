@@ -38,16 +38,26 @@ optional arguments: <br>
   --after-trigger AFTER_TRIGGER 
                         Query only alerts whose first detection occurred after 
                         a certain date. If this boolean value is True, then
-                        --jd-trigger must be given.  <br>
+                        --jd-trigger must be given (default=True).  <br>
   --jd-trigger JD_TRIGGER 
-                        Julian Day of the trigger <br>
+                        Julian Day of the trigger. If not given, it will be <br>
+                        read from the skymap header. <br>
   --min-days MIN_DAYS   Minimum time (days) between the first and last alert <br>
   --max-days MAX_DAYS   Maximum time (days) between the first and last alert <br>
+  --within-days WITHIN_DAYS  <br>
+                        Maximum time (days) between the jd-trigger and the  <br>
+                        first alert  <br>
   --ndethist NDETHIST_MIN
                         Minimum number of detections <br>
   --slices SLICES       Number (integer) of slices in which the query will be
                         devided <br>
   --out OUT             Output filename <br>
+
+  --ingest INGEST       Use with caution! Ingest the candidates to the <br>
+                        scanning page on the GROWTH marshal <br>
+  --ingest-program INGEST_PROGRAM
+                        Ingest the candidates to the scanning page of the <br>
+                        given GROWTH marshal program <br>
 
 example: python query_skymap.py --skymap LALInference.fits.gz --level 90 --slice 100 --jd-trigger 2458736.5599421295 --min-days 0.02 --max-days 30. <br>
 

@@ -517,11 +517,13 @@ if __name__ == "__main__":
                         required=False,
                         help='Query only alerts whose first detection \
                         occurred after a certain date. If this boolean \
-                        value is True, then --jd-trigger must be given.',
+                        value is True, then --jd-trigger must be given \
+                        (default=True)',
                         default=True)
     parser.add_argument('--jd-trigger', dest='jd_trigger', type=float,
                         required=False,
-                        help='Julian Day of the trigger', default=-1.)
+                        help='Julian Day of the trigger. If not given, \
+                        it will be read from the skymap header', default=-1.)
     parser.add_argument('--min-days', dest='min_days', type=float,
                         required=False,
                         help='Minimum time (days) between the first \
