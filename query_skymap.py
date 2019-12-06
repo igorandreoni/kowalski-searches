@@ -12,6 +12,7 @@ from astropy.io import ascii
 from astropy import units as u
 from astropy.coordinates import SkyCoord
 import healpy as hp
+from ligo.skymap.io import fits
 
 from penquins import Kowalski
 
@@ -23,6 +24,29 @@ def str2bool(v):
         return False
     else:
         raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
+def rotate_map(hmap, rot_theta, rot_phi):
+    """
+    Take hmap (a healpix map array) and return another healpix map array 
+    which is ordered such that it has been rotated in (theta, phi) by the 
+    amounts given.
+    """
+    nside = hp.npix2nside(len(hmap))
+
+    # Get theta, phi for non-rotated map
+    t,p = hp.pix2ang(nside, np.arange(hp.nside2npix(nside))) #theta, phi
+
+    # Define a rotator
+    r = hp.Rotator(deg=False, rot=[rot_phi,rot_theta])
+
+    # Get theta, phi under rotated co-ordinates
+    trot, prot = r(t,p)
+
+    # Interpolate map onto these co-ordinates
+    rot_map = hp.get_interp_val(hmap, trot, prot)
+
+    return rot_map
 
 
 def print_query_params(args, ra_center, dec_center, jd_trigger):
@@ -110,6 +134,19 @@ def check_clu_transients(sources_kowalski, clu_sources):
     print(f"Sources not saved in CLU: {sources_not_in_clu}")
 
 
+def read_skymap_rotate(skymap_filename, theta=0, phi=0):
+    '''Read the healpix skymap'''
+
+    skymap, metadata = fits.read_sky_map(skymap_filename, nest=True)
+    nside = hp.get_nside(skymap)
+    npix = hp.nside2npix(nside)
+    skymap = skymap[hp.ring2nest(nside, np.arange(npix))]
+    if (not theta==0) or (not phi == 0):
+        skymap = rotate_map(skymap, np.deg2rad(theta), np.deg2rad(phi))
+
+    return skymap
+
+
 def read_skymap(skymap_filename):
     '''Read the healpix skymap'''
 
@@ -155,13 +192,13 @@ def angular_distance(ra1, dec1, ra2, dec2):
     return dist/np.pi*180.
 
 
-def do_getfields_new(skymap_filename, FOV=60/3600.0, ra=None, dec=None, radius=None,
+def do_getfields_new(skymap, FOV=60/3600.0, ra=None, dec=None, radius=None,
                      level=None):
 
     ras, decs = tesselation_spiral(FOV, scale=0.80)
     coords_dict_list = list({"ra": r, "dec": d} for r, d in zip(ras, decs))
     coords_out = select_sources_in_level(coords_dict_list,
-                                         skymap_filename,
+                                         skymap,
                                          level=level)
     ra_out = np.array(list(c["ra"] for c in coords_out))
     dec_out = np.array(list(c["dec"] for c in coords_out))
@@ -436,8 +473,8 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
     return set_objectId_all
 
 
-def select_sources_in_level(sources, skymap_filename, level=90):
-    hpx, header = hp.read_map(skymap_filename, h=True, verbose=False)
+def select_sources_in_level(sources, hpx, level=90):
+  
     i = np.flipud(np.argsort(hpx))
     sorted_credible_levels = np.cumsum(hpx[i])
     credible_levels = np.empty_like(sorted_credible_levels)
@@ -554,13 +591,21 @@ if __name__ == "__main__":
                         help='Ingest the candidates to the scanning page of \
                         the given GROWTH marshal program',
                         default='Electromagnetic Counterparts to Gravitational Waves')
+    parser.add_argument('--phi', dest='phi', type=float,
+                        required=False,
+                        help='Phi angle rotation of the skymap', default=0.)
+    parser.add_argument('--theta', dest='theta', type=float,
+                        required=False,
+                        help='Theta angle rotation of the skymap', default=0.)
 
     args = parser.parse_args()
 
     # Read the skymap and create the tessellation
     if args.skymap_filename is not None:
         healpix, header = read_skymap(args.skymap_filename)
-        ra_center, dec_center = do_getfields_new(args.skymap_filename,
+        if args.phi != 0 or args.theta !=0:
+            healpix = read_skymap_rotate(args.skymap_filename, theta=args.theta, phi=args.phi)
+        ra_center, dec_center = do_getfields_new(healpix,
                                                  FOV=args.fov/60.,
                                                  level=args.level)
     else:
@@ -568,9 +613,10 @@ if __name__ == "__main__":
 
     if args.radius is None:
         args.radius = args.fov
-    # Pre-select coordinates above Dec = -30
-    ra_center = ra_center[np.where(dec_center > -30)]
-    dec_center = dec_center[np.where(dec_center > -30)]
+
+    # Pre-select coordinates above Dec = -40
+    ra_center = ra_center[np.where(dec_center > -40)]
+    dec_center = dec_center[np.where(dec_center > -40)]
 
     if args.jd_trigger == -1:
         jd_trigger = Time(header['MJD-OBS'], format='mjd').jd
@@ -599,7 +645,7 @@ if __name__ == "__main__":
     # Check which sources are actually inside the contour
     sources = query_kowalski_coords(username, password, sources_kowalski)
     sources_within = select_sources_in_level(sources,
-                                             args.skymap_filename,
+                                             healpix,
                                              args.level)
 
     # Print results to an output text file

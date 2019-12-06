@@ -57,6 +57,8 @@ optional arguments: <br>
   --ingest-program INGEST_PROGRAM
                         Ingest the candidates to the scanning page of the <br>
                         given GROWTH marshal program <br>
+  --phi PHI             Phi angle rotation of the skymap <br>
+  --theta THETA         Theta angle rotation of the skymap <br>
 
 example: python query_skymap.py --skymap LALInference.fits.gz --level 90 --slice 20 --min-days 0.02 --max-days 30. --within-days 2.0 <br>
 
