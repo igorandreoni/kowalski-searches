@@ -415,6 +415,7 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
                 try:
                     if (np.abs(info['candidate']['distpsnr1']) < 15. and
                     info['candidate']['srmag1'] < 15. and
+                    info['candidate']['srmag1'] > 0. and
                     info['candidate']['sgscore1'] >= 0.5):
                         continue
                 except (KeyError, ValueError):
@@ -422,6 +423,7 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
                 try:
                     if (np.abs(info['candidate']['distpsnr2']) < 15. and
                     info['candidate']['srmag2'] < 15. and
+                    info['candidate']['srmag2'] > 0. and
                     info['candidate']['sgscore2'] >= 0.5):
                         continue
                 except (KeyError, ValueError):
@@ -429,6 +431,7 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
                 try:
                     if (np.abs(info['candidate']['distpsnr3']) < 15. and
                     info['candidate']['srmag3'] < 15. and
+                    info['candidate']['srmag3'] > 0. and
                     info['candidate']['sgscore3'] >= 0.5):
                         continue
                 except (KeyError, ValueError):
@@ -540,7 +543,7 @@ if __name__ == "__main__":
                         help='Enclosed probability', default=90)
     parser.add_argument('--fov', dest='fov', type=float, required=False,
                         help='Field of view of each cone (radius, in arcmin)',
-                        default=60)
+                        default=65)
     parser.add_argument('--ra-center', dest='ra_center', nargs='+',
                         required=False,
                         help='Right ascension of the center (list, in deg)')
