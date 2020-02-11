@@ -85,5 +85,27 @@ optional arguments: <br>
                        galaxies to explore <br>
   --slices SLICES      Number (integer) of slices in which the query will be <br>
                        devided <br>
-
-
+ <br>
+## Query FRB
+usage: query_frb.py [-h] --cat CAT_NAME [--frb FRB_NAMES [FRB_NAMES ...]] <br>
+                    [--out OUT] [--out-lc OUT_LC] [--r SEARCH_RADIUS] <br>
+                    [--ndethist NDETHIST] [--p PLOT] [--um USE_METADATA] <br>
+                    [--sp SAVEPLOT] [--reject-neg REJECT_NEG] <br>
+ <br>
+Query kowalski with cone searces to find transients possibly associated <br>
+with FRBs reported in FRBCat(http://frbcat.org) 
+ <br>
+optional arguments: <br>
+  -h, --help            show this help message and exit <br>
+  --cat CAT_NAME        CSV file downloaded from the FRBcat page <br>
+  --frb FRB_NAMES [FRB_NAMES ...] <br>
+                        Names of specific FRBs to check <br>
+  --out OUT             output JSON file name; example: results.json <br>
+  --out-lc OUT_LC       output CSV file name; example: lc.csv <br>
+  --r SEARCH_RADIUS     Cone search radius in arcmin (default=15) <br>
+  --ndethist NDETHIST   Minimum number of detections (default=2) <br>
+  --p PLOT              Plot the results? (boolean) <br>
+  --um USE_METADATA     Plot upper limits using ztfquery metadata (boolean) <br>
+  --sp SAVEPLOT         Save the plot of the results? (boolean) <br>
+  --reject-neg REJECT_NEG <br>
+                        Reject candidates with negative detections? (boolean) <br>
