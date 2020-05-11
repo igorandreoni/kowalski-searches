@@ -109,3 +109,7 @@ optional arguments: <br>
   --sp SAVEPLOT         Save the plot of the results? (boolean) <br>
   --reject-neg REJECT_NEG <br>
                         Reject candidates with negative detections? (boolean) <br>
+
+## Plot volume
+plot_volume.py is a snippet to plot the explored volume in a given time frame as the number of observed field is reduced. <br>
+Limitation: overheads are calculated only for field switch and there is no limit to the exptime on a given field.
