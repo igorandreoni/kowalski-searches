@@ -407,8 +407,8 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
                     info['candidate']['jdstarthist']) > max_days:
                         out_of_time_window.append(info['objectId'])
                 try:
-                    if (np.abs(info['candidate']['distpsnr1']) < 2. and
-                    info['candidate']['sgscore1'] >= 0.50):
+                    if (np.abs(info['candidate']['distpsnr1']) < 1.5 and
+                    info['candidate']['sgscore1'] > 0.50):
                         stellar_list.append(info['objectId'])
                 except (KeyError, ValueError):
                     pass
