@@ -232,7 +232,7 @@ def select_sources_in_contour(sources, skymap, level=90):
 
 def query_kowalski(username, password, ra_center, dec_center, radius,
                    jd_trigger, min_days, max_days, slices, ndethist_min,
-                   within_days, after_trigger=True):
+                   within_days, after_trigger=True, verbose=True):
     '''Query kowalski and apply the selection criteria'''
 
     k = Kowalski(username=username, password=password, verbose=False)
@@ -279,18 +279,18 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
         except:
             print(f"slice: {int(slice_lim)}:{int(len(ra_center))}")
         q = {"query_type": "cone_search",
-             "object_coordinates": {
+             "query": {"object_coordinates": {
                                     "radec": f"{coords_arr}",
                                     "cone_search_radius": f"{radius}",
                                     "cone_search_unit": "arcmin"
                                     },
-             "catalogs": {
+                     "catalogs": {
                           "ZTF_alerts": {
                                          "filter": {
                                                     "candidate.jd":
                                                     {'$gt': jd_trigger},
                                                     "candidate.drb":
-                                                    {'$gt': 0.5},
+                                                    {'$gt': 0.8},
                                                     "candidate.ndethist":
                                                     {'$gt':
                                                      ndethist_min_corrected},
@@ -346,6 +346,7 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
                            },
              "kwargs": {"hint": "gw01"}
              }
+         }
 
         # Perform the query
         r = k.query(query=q)
@@ -357,23 +358,27 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
         out_of_time_window = []
         stellar_list = []
 
-        try:
-            if r['result_data']['ZTF_alerts'] == []:
-                continue
-            keys_list = list(r['result_data']['ZTF_alerts'].keys())
-        except AttributeError:
-            print("Error in the keys list?? Check 'r' ")
-            # Try one more time
-            print("Trying to query again the same slice")
+        # Try to query kowalski up to 5 times
+        i = 1
+        no_candidates = False
+        while i <=5:
             try:
-                r = k.query(query=q)
-                keys_list = list(r['result_data']['ZTF_alerts'].keys())
-            except AttributeError:
-                print("The query failed again, skipping slice..")
-                continue
-
+                if r['data'] == []:
+                    no_candidates = True
+                keys_list = list(r['data']['ZTF_alerts'].keys())
+                break
+            except (AttributeError, KeyError, TypeError):
+                print(f"failed attempt {i}")
+                i += 1
+        if i > 5:
+            print(f"SKIPPING jd={jd}, field={field} after 5 attempts")
+            continue
+        if no_candidates is True:
+            if verbose is True:
+                print(f"No candidates")
+            continue
         for key in keys_list:
-            all_info = r['result_data']['ZTF_alerts'][key]
+            all_info = r['data']['ZTF_alerts'][key]
 
             for info in all_info:
                 if info['objectId'] in old:
@@ -394,10 +399,9 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
                 jd_trigger) > within_days:
                     old.append(info['objectId'])
                 # REMOVE!  Only for O3a paper
-                # if (info['candidate']['jdendhist'] -
-                # info['candidate']['jdstarthist']) >= 72./24. and
-                # info['candidate']['ndethist'] <= 2. :
-                #     out_of_time_window.append(info['objectId'])
+                #if (info['candidate']['jdendhist'] -
+                #info['candidate']['jdstarthist']) >= 72./24. and info['candidate']['ndethist'] <= 2.:
+                #    out_of_time_window.append(info['objectId'])
                 if after_trigger is True:
                     if (info['candidate']['jdendhist'] -
                     jd_trigger) > max_days:
@@ -516,7 +520,9 @@ def query_kowalski_coords(username, password, names):
                    }
          }
     results_all = k.query(query=q)
-    results = results_all['result_data']['query_result']
+    import pdb
+    pdb.set_trace()
+    results = results_all['data']
     sources = []
     for n in names:
         source = {}
@@ -594,6 +600,10 @@ if __name__ == "__main__":
                         help='Ingest the candidates to the scanning page of \
                         the given GROWTH marshal program',
                         default='Electromagnetic Counterparts to Gravitational Waves')
+    parser.add_argument('--event',
+                        dest='event_name', type=str, required=False,
+                        help='Name of the event',
+                        default=None)
     parser.add_argument('--phi', dest='phi', type=float,
                         required=False,
                         help='Phi angle rotation of the skymap', default=0.)
@@ -653,9 +663,9 @@ if __name__ == "__main__":
 
     # Print results to an output text file
     with open(args.out, 'a') as f:
-        f.write(f"{args} \n")
+        f.write(f"{args} \n") 
         for s in sources_within:
-            f.write(f"{s['name']}, {s['ra']}, {s['dec']} \n")
+            f.write(f"{s['name']}, {s['ra']}, {s['dec']}, {args.event_name} \n")
 
     # GROWTH marshal credentials
     username_marshal = secrets['marshal_user'][0]
@@ -702,7 +712,7 @@ if __name__ == "__main__":
                         print("Error ingesting {s['name']}\
                                in {args.ingest_program}")
                         print(e)
-
+    '''
     # Check the CLU science program on the Marshal
     program_name = 'Census of the Local Universe'
     clu_sources = get_candidates_growth_marshal(program_name,
@@ -711,5 +721,5 @@ if __name__ == "__main__":
 
     # For each transient check if it is present in the CLU science program
     check_clu_transients(sources_within, clu_sources)
-
+    '''
     print("Done.")
