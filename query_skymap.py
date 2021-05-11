@@ -17,6 +17,103 @@ from ligo.skymap.io import fits
 from penquins import Kowalski
 
 
+def api(method, endpoint, data=None):
+    """API request"""
+
+    headers = {'Authorization': f'token {token}'}
+    response = requests.request(method, endpoint, json=data, headers=headers)
+    return response
+
+def check_source_exists(source):
+    """check if the source exists"""
+
+    response = api('HEAD', f'https://fritz.science/api/sources/{source}')
+
+    if response.status_code == 200:
+        print(f"Source {source} was found on Fritz")
+    else:
+        print(f"Source {source} does not exist on Fritz!")
+
+    return response
+
+def check_candidate_exists(source):
+    """check if the source exists"""
+
+    response = api('HEAD', f'https://fritz.science/api/candidates/{source}')
+
+    if response.status_code == 200:
+        print(f"Candidate {source} was found on Fritz")
+    else:
+        print(f"Candidate {source} does not exist on Fritz!")
+
+    return response
+
+
+def get_groups(source):
+    """Get the groups a source belongs to"""
+
+    response = api('GET',
+                   f'https://fritz.science/api/sources/{source}'
+                   )
+
+    if response.status_code == 200:
+        groups = response.json()['data']['groups']
+    else:
+        print(f'HTTP code: {response.status_code}, {response.reason}')
+
+    return groups
+
+
+def get_candidate(name):
+    """
+    Get a candidate from the Fritz marshal
+
+    ----
+    Parameters
+
+    name str
+        source ZTF name
+    """
+
+    response = api('GET',
+                   f'https://fritz.science/api/candidates/{name}')
+
+    print(f'HTTP code: {response.status_code}, {response.reason}')
+    if response.status_code in (200, 400):
+        print(f'JSON response: {response.json()}')
+
+    return response
+
+def post_alerts(name, group_ids=None):
+    """
+    Post source to the alerts endpoint
+
+    ----
+    Parameters
+
+    name str
+        source ZTF name
+    """
+
+    if group_ids is None:
+        response = api('POST',
+                       f'https://fritz.science/api/alerts/{name}')
+    else:
+        data = {"candid": name,
+                "group_ids": group_ids
+                }
+
+        response = api('POST',
+                       f'https://fritz.science/api/alerts/{name}',
+                       data=data)
+
+    print(f'HTTP code: {response.status_code}, {response.reason}')
+    if response.status_code == 400:
+        print(f'JSON response: {response.json()}')
+
+    return response.json()
+
+
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1', 'Yes', 'True'):
         return True
@@ -346,7 +443,7 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
                            },
              "kwargs": {"hint": "gw01"}
              }
-         }
+             }
 
         # Perform the query
         r = k.query(query=q)
@@ -520,8 +617,6 @@ def query_kowalski_coords(username, password, names):
                    }
          }
     results_all = k.query(query=q)
-    import pdb
-    pdb.set_trace()
     results = results_all['data']
     sources = []
     for n in names:
@@ -595,11 +690,11 @@ if __name__ == "__main__":
                         help='Use with caution! Ingest the candidates to the \
                         scanning page on the GROWTH marshal',
                         default=False)
-    parser.add_argument('--ingest-program',
-                        dest='ingest_program', type=str, required=False,
+    parser.add_argument('--ingest-program-id',
+                        dest='ingest_program', type=int, required=False,
                         help='Ingest the candidates to the scanning page of \
-                        the given GROWTH marshal program',
-                        default='Electromagnetic Counterparts to Gravitational Waves')
+                        the given Frits marshal program',
+                        default='48') # Gamma-ray bursts is id=48
     parser.add_argument('--event',
                         dest='event_name', type=str, required=False,
                         help='Name of the event',
@@ -667,12 +762,40 @@ if __name__ == "__main__":
         for s in sources_within:
             f.write(f"{s['name']}, {s['ra']}, {s['dec']}, {args.event_name} \n")
 
-    # GROWTH marshal credentials
-    username_marshal = secrets['marshal_user'][0]
-    password_marshal = secrets['marshal_pwd'][0]
+    # Fritz marshal credentials
+    token = secrets['fritz_marshal_token'][0]
 
     # Ingest into the marshal scanning page
     if args.ingest:
+        for s in sources_within:
+            source = s['name']
+            # Check if the candidate exists
+            response = check_candidate_exists(source)
+            print("Does the candidate exist?")
+            print(response)
+
+            # Check if the source exists
+            response = check_source_exists(source)
+            print("Does the source exist?")
+            print(response)
+            
+
+            # If the source exists....
+            if response.status_code != 200:
+                groups = get_groups(source)
+                group_ids = [g['id'] for g in groups]
+                if not (args.ingest_program in group_ids):
+                    print(f"{source} was not saved in program id {args.ingest_program}")
+                # Which of my groups still needs the source to be saved?
+            # Check saved too?
+
+            # Post new ones
+            #import pdb
+            #pdb.set_trace()
+            #risp = post_alerts(source, group_ids=args.ingest_program)
+
+
+        '''
         tbl_ingested = ascii.read('ingested.csv')
         sources_ingestion = list({"name": s["name"], "candid": s["candid"]}
                                  for s in sources_within
@@ -712,14 +835,5 @@ if __name__ == "__main__":
                         print("Error ingesting {s['name']}\
                                in {args.ingest_program}")
                         print(e)
-    '''
-    # Check the CLU science program on the Marshal
-    program_name = 'Census of the Local Universe'
-    clu_sources = get_candidates_growth_marshal(program_name,
-                                                username_marshal,
-                                                password_marshal)
-
-    # For each transient check if it is present in the CLU science program
-    check_clu_transients(sources_within, clu_sources)
     '''
     print("Done.")
