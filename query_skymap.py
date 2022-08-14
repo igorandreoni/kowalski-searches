@@ -464,7 +464,7 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
                     no_candidates = True
                 keys_list = list(r['data']['ZTF_alerts'].keys())
                 break
-            except (AttributeError, KeyError, TypeError):
+            except (AttributeError, KeyError, TypeError, ConnectionError):
                 print(f"failed attempt {i}")
                 i += 1
         if i > 5:
