@@ -24,10 +24,10 @@ def api(method, endpoint, data=None):
     response = requests.request(method, endpoint, json=data, headers=headers)
     return response
 
-def check_source_exists(source):
+def check_source_exists(source, url="https://fritz.science"):
     """check if the source exists"""
 
-    response = api('HEAD', f'https://fritz.science/api/sources/{source}')
+    response = api('HEAD', f'{url}/api/sources/{source}')
 
     if response.status_code == 200:
         print(f"Source {source} was found on Fritz")
@@ -36,10 +36,10 @@ def check_source_exists(source):
 
     return response
 
-def check_candidate_exists(source):
+def check_candidate_exists(source, url="https://fritz.science"):
     """check if the source exists"""
 
-    response = api('HEAD', f'https://fritz.science/api/candidates/{source}')
+    response = api('HEAD', f'{url}/api/candidates/{source}')
 
     if response.status_code == 200:
         print(f"Candidate {source} was found on Fritz")
@@ -49,13 +49,12 @@ def check_candidate_exists(source):
     return response
 
 
-def get_groups(source):
+def get_groups(source, url="https://fritz.science"):
     """Get the groups a source belongs to"""
 
     response = api('GET',
-                   f'https://fritz.science/api/sources/{source}'
+                   f'{url}/api/sources/{source}'
                    )
-
     if response.status_code == 200:
         groups = response.json()['data']['groups']
     else:
@@ -63,8 +62,7 @@ def get_groups(source):
 
     return groups
 
-
-def get_candidate(name):
+def get_candidate(name, url="https://fritz.science"):
     """
     Get a candidate from the Fritz marshal
 
@@ -76,7 +74,7 @@ def get_candidate(name):
     """
 
     response = api('GET',
-                   f'https://fritz.science/api/candidates/{name}')
+                   f'{url}/api/candidates/{name}')
 
     print(f'HTTP code: {response.status_code}, {response.reason}')
     if response.status_code in (200, 400):
@@ -84,7 +82,7 @@ def get_candidate(name):
 
     return response
 
-def post_alerts(name, group_ids=None):
+def post_alerts(name, group_ids=None, url="https://fritz.science"):
     """
     Post source to the alerts endpoint
 
@@ -97,14 +95,14 @@ def post_alerts(name, group_ids=None):
 
     if group_ids is None:
         response = api('POST',
-                       f'https://fritz.science/api/alerts/{name}')
+                       f'{url}/api/alerts/{name}')
     else:
         data = {"candid": name,
                 "group_ids": group_ids
                 }
 
         response = api('POST',
-                       f'https://fritz.science/api/alerts/{name}',
+                       f'{url}/api/alerts/{name}',
                        data=data)
 
     print(f'HTTP code: {response.status_code}, {response.reason}')
@@ -112,7 +110,6 @@ def post_alerts(name, group_ids=None):
         print(f'JSON response: {response.json()}')
 
     return response.json()
-
 
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1', 'Yes', 'True'):
@@ -332,7 +329,8 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
                    within_days, after_trigger=True, verbose=True):
     '''Query kowalski and apply the selection criteria'''
 
-    k = Kowalski(username=username, password=password, verbose=False)
+    TIMEOUT = 180
+    k = Kowalski(username=username, password=password, verbose=False, timeout=TIMEOUT)
     # Initialize a set for the results
     set_objectId_all = set([])
     slices = slices + 1
@@ -781,18 +779,25 @@ if __name__ == "__main__":
             
 
             # If the source exists....
-            if response.status_code != 200:
-                groups = get_groups(source)
-                group_ids = [g['id'] for g in groups]
-                if not (args.ingest_program in group_ids):
-                    print(f"{source} was not saved in program id {args.ingest_program}")
-                # Which of my groups still needs the source to be saved?
+            #if response.status_code != 200:
+            #    groups = get_groups(source)
+            #    group_ids = [g['id'] for g in groups]
+            #    if not (args.ingest_program in group_ids):
+            #        print(f"{source} was not saved in program id {args.ingest_program}")
+            #    # Which of my groups still needs the source to be saved?
             # Check saved too?
 
             # Post new ones
-            #import pdb
-            #pdb.set_trace()
-            #risp = post_alerts(source, group_ids=args.ingest_program)
+            nretries = 10
+            counter = 0
+            while counter < nretries:
+                # Post new ones
+                try:
+                    response = post_alerts(source, group_ids=[args.ingest_program])
+                    break
+                except:
+                    counter = counter + 1
+                    time.sleep(30)
 
 
         '''
