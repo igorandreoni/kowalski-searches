@@ -771,11 +771,13 @@ if __name__ == "__main__":
             response = check_candidate_exists(source)
             print("Does the candidate exist?")
             print(response)
+            time.sleep(1)
 
             # Check if the source exists
             response = check_source_exists(source)
             print("Does the source exist?")
             print(response)
+            time.sleep(1)
             
 
             # If the source exists....
