@@ -17,6 +17,100 @@ from ligo.skymap.io import fits
 from penquins import Kowalski
 
 
+def api(method, endpoint, data=None):
+    """API request"""
+
+    headers = {'Authorization': f'token {token}'}
+    response = requests.request(method, endpoint, json=data, headers=headers)
+    return response
+
+def check_source_exists(source, url="https://fritz.science"):
+    """check if the source exists"""
+
+    response = api('HEAD', f'{url}/api/sources/{source}')
+
+    if response.status_code == 200:
+        print(f"Source {source} was found on Fritz")
+    else:
+        print(f"Source {source} does not exist on Fritz!")
+
+    return response
+
+def check_candidate_exists(source, url="https://fritz.science"):
+    """check if the source exists"""
+
+    response = api('HEAD', f'{url}/api/candidates/{source}')
+
+    if response.status_code == 200:
+        print(f"Candidate {source} was found on Fritz")
+    else:
+        print(f"Candidate {source} does not exist on Fritz!")
+
+    return response
+
+
+def get_groups(source, url="https://fritz.science"):
+    """Get the groups a source belongs to"""
+
+    response = api('GET',
+                   f'{url}/api/sources/{source}'
+                   )
+    if response.status_code == 200:
+        groups = response.json()['data']['groups']
+    else:
+        print(f'HTTP code: {response.status_code}, {response.reason}')
+
+    return groups
+
+def get_candidate(name, url="https://fritz.science"):
+    """
+    Get a candidate from the Fritz marshal
+
+    ----
+    Parameters
+
+    name str
+        source ZTF name
+    """
+
+    response = api('GET',
+                   f'{url}/api/candidates/{name}')
+
+    print(f'HTTP code: {response.status_code}, {response.reason}')
+    if response.status_code in (200, 400):
+        print(f'JSON response: {response.json()}')
+
+    return response
+
+def post_alerts(name, group_ids=None, url="https://fritz.science"):
+    """
+    Post source to the alerts endpoint
+
+    ----
+    Parameters
+
+    name str
+        source ZTF name
+    """
+
+    if group_ids is None:
+        response = api('POST',
+                       f'{url}/api/alerts/{name}')
+    else:
+        data = {"candid": name,
+                "group_ids": group_ids
+                }
+
+        response = api('POST',
+                       f'{url}/api/alerts/{name}',
+                       data=data)
+
+    print(f'HTTP code: {response.status_code}, {response.reason}')
+    if response.status_code == 400:
+        print(f'JSON response: {response.json()}')
+
+    return response.json()
+
 def str2bool(v):
     if v.lower() in ('yes', 'true', 't', 'y', '1', 'Yes', 'True'):
         return True
@@ -232,10 +326,11 @@ def select_sources_in_contour(sources, skymap, level=90):
 
 def query_kowalski(username, password, ra_center, dec_center, radius,
                    jd_trigger, min_days, max_days, slices, ndethist_min,
-                   within_days, after_trigger=True):
+                   within_days, after_trigger=True, verbose=True):
     '''Query kowalski and apply the selection criteria'''
 
-    k = Kowalski(username=username, password=password, verbose=False)
+    TIMEOUT = 180
+    k = Kowalski(username=username, password=password, verbose=False, timeout=TIMEOUT)
     # Initialize a set for the results
     set_objectId_all = set([])
     slices = slices + 1
@@ -279,18 +374,18 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
         except:
             print(f"slice: {int(slice_lim)}:{int(len(ra_center))}")
         q = {"query_type": "cone_search",
-             "object_coordinates": {
+             "query": {"object_coordinates": {
                                     "radec": f"{coords_arr}",
                                     "cone_search_radius": f"{radius}",
                                     "cone_search_unit": "arcmin"
                                     },
-             "catalogs": {
+                     "catalogs": {
                           "ZTF_alerts": {
                                          "filter": {
                                                     "candidate.jd":
                                                     {'$gt': jd_trigger},
                                                     "candidate.drb":
-                                                    {'$gt': 0.5},
+                                                    {'$gt': 0.8},
                                                     "candidate.ndethist":
                                                     {'$gt':
                                                      ndethist_min_corrected},
@@ -346,6 +441,7 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
                            },
              "kwargs": {"hint": "gw01"}
              }
+             }
 
         # Perform the query
         r = k.query(query=q)
@@ -357,23 +453,27 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
         out_of_time_window = []
         stellar_list = []
 
-        try:
-            if r['result_data']['ZTF_alerts'] == []:
-                continue
-            keys_list = list(r['result_data']['ZTF_alerts'].keys())
-        except AttributeError:
-            print("Error in the keys list?? Check 'r' ")
-            # Try one more time
-            print("Trying to query again the same slice")
+        # Try to query kowalski up to 5 times
+        i = 1
+        no_candidates = False
+        while i <=5:
             try:
-                r = k.query(query=q)
-                keys_list = list(r['result_data']['ZTF_alerts'].keys())
-            except AttributeError:
-                print("The query failed again, skipping slice..")
-                continue
-
+                if r['data'] == []:
+                    no_candidates = True
+                keys_list = list(r['data']['ZTF_alerts'].keys())
+                break
+            except (AttributeError, KeyError, TypeError, ConnectionError):
+                print(f"failed attempt {i}")
+                i += 1
+        if i > 5:
+            print(f"SKIPPING jd={jd}, field={field} after 5 attempts")
+            continue
+        if no_candidates is True:
+            if verbose is True:
+                print(f"No candidates")
+            continue
         for key in keys_list:
-            all_info = r['result_data']['ZTF_alerts'][key]
+            all_info = r['data']['ZTF_alerts'][key]
 
             for info in all_info:
                 if info['objectId'] in old:
@@ -394,10 +494,9 @@ def query_kowalski(username, password, ra_center, dec_center, radius,
                 jd_trigger) > within_days:
                     old.append(info['objectId'])
                 # REMOVE!  Only for O3a paper
-                # if (info['candidate']['jdendhist'] -
-                # info['candidate']['jdstarthist']) >= 72./24. and
-                # info['candidate']['ndethist'] <= 2. :
-                #     out_of_time_window.append(info['objectId'])
+                #if (info['candidate']['jdendhist'] -
+                #info['candidate']['jdstarthist']) >= 72./24. and info['candidate']['ndethist'] <= 2.:
+                #    out_of_time_window.append(info['objectId'])
                 if after_trigger is True:
                     if (info['candidate']['jdendhist'] -
                     jd_trigger) > max_days:
@@ -516,7 +615,7 @@ def query_kowalski_coords(username, password, names):
                    }
          }
     results_all = k.query(query=q)
-    results = results_all['result_data']['query_result']
+    results = results_all['data']
     sources = []
     for n in names:
         source = {}
@@ -589,11 +688,15 @@ if __name__ == "__main__":
                         help='Use with caution! Ingest the candidates to the \
                         scanning page on the GROWTH marshal',
                         default=False)
-    parser.add_argument('--ingest-program',
-                        dest='ingest_program', type=str, required=False,
+    parser.add_argument('--ingest-program-id',
+                        dest='ingest_program', type=int, required=False,
                         help='Ingest the candidates to the scanning page of \
-                        the given GROWTH marshal program',
-                        default='Electromagnetic Counterparts to Gravitational Waves')
+                        the given Frits marshal program',
+                        default='48') # Gamma-ray bursts is id=48
+    parser.add_argument('--event',
+                        dest='event_name', type=str, required=False,
+                        help='Name of the event',
+                        default=None)
     parser.add_argument('--phi', dest='phi', type=float,
                         required=False,
                         help='Phi angle rotation of the skymap', default=0.)
@@ -653,16 +756,53 @@ if __name__ == "__main__":
 
     # Print results to an output text file
     with open(args.out, 'a') as f:
-        f.write(f"{args} \n")
+        f.write(f"{args} \n") 
         for s in sources_within:
-            f.write(f"{s['name']}, {s['ra']}, {s['dec']} \n")
+            f.write(f"{s['name']}, {s['ra']}, {s['dec']}, {args.event_name} \n")
 
-    # GROWTH marshal credentials
-    username_marshal = secrets['marshal_user'][0]
-    password_marshal = secrets['marshal_pwd'][0]
+    # Fritz marshal credentials
+    token = secrets['fritz_marshal_token'][0]
 
     # Ingest into the marshal scanning page
     if args.ingest:
+        for s in sources_within:
+            source = s['name']
+            # Check if the candidate exists
+            response = check_candidate_exists(source)
+            print("Does the candidate exist?")
+            print(response)
+            time.sleep(1)
+
+            # Check if the source exists
+            response = check_source_exists(source)
+            print("Does the source exist?")
+            print(response)
+            time.sleep(1)
+            
+
+            # If the source exists....
+            #if response.status_code != 200:
+            #    groups = get_groups(source)
+            #    group_ids = [g['id'] for g in groups]
+            #    if not (args.ingest_program in group_ids):
+            #        print(f"{source} was not saved in program id {args.ingest_program}")
+            #    # Which of my groups still needs the source to be saved?
+            # Check saved too?
+
+            # Post new ones
+            nretries = 10
+            counter = 0
+            while counter < nretries:
+                # Post new ones
+                try:
+                    response = post_alerts(source, group_ids=[args.ingest_program])
+                    break
+                except:
+                    counter = counter + 1
+                    time.sleep(30)
+
+
+        '''
         tbl_ingested = ascii.read('ingested.csv')
         sources_ingestion = list({"name": s["name"], "candid": s["candid"]}
                                  for s in sources_within
@@ -702,14 +842,5 @@ if __name__ == "__main__":
                         print("Error ingesting {s['name']}\
                                in {args.ingest_program}")
                         print(e)
-
-    # Check the CLU science program on the Marshal
-    program_name = 'Census of the Local Universe'
-    clu_sources = get_candidates_growth_marshal(program_name,
-                                                username_marshal,
-                                                password_marshal)
-
-    # For each transient check if it is present in the CLU science program
-    check_clu_transients(sources_within, clu_sources)
-
+    '''
     print("Done.")
